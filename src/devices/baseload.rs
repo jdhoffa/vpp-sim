@@ -112,3 +112,95 @@ impl BaseLoad {
         kw.max(0.0) // no negative demand
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f32::consts::PI;
+
+    #[test]
+    fn test_new_baseload() {
+        let load = BaseLoad::new(1.0, 0.5, 0.0, 0.1, 24, 42);
+        assert_eq!(load.base_kw, 1.0);
+        assert_eq!(load.amp_kw, 0.5);
+        assert_eq!(load.phase_rad, 0.0);
+        assert_eq!(load.noise_std, 0.1);
+        assert_eq!(load.steps_per_day, 24);
+    }
+
+    #[test]
+    fn test_steps_per_day_minimum() {
+        // Should enforce minimum of 1 step per day
+        let load = BaseLoad::new(1.0, 0.5, 0.0, 0.1, 0, 42);
+        assert_eq!(load.steps_per_day, 1);
+    }
+
+    #[test]
+    fn test_deterministic_pattern() {
+        // With zero noise, demand should be predictable
+        let mut load = BaseLoad::new(2.0, 1.0, 0.0, 0.0, 4, 42);
+
+        // At phase 0, first step should be base_kw (since sin(0) = 0)
+        assert_eq!(load.demand_kw(0), 2.0);
+
+        // At quarter day (π/2), should be base_kw + amp_kw (since sin(π/2) = 1)
+        let demand = load.demand_kw(1);
+        assert!((demand - 3.0).abs() < 1e-5);
+
+        // At half day (π), should be base_kw (since sin(π) = 0)
+        let demand = load.demand_kw(2);
+        assert!((demand - 2.0).abs() < 1e-5);
+
+        // At 3/4 day (3π/2), should be base_kw - amp_kw (since sin(3π/2) = -1)
+        let demand = load.demand_kw(3);
+        assert!((demand - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_phase_shift() {
+        // Test with phase shift of π/2
+        let mut load = BaseLoad::new(2.0, 1.0, PI / 2.0, 0.0, 4, 42);
+
+        // At phase π/2, first step should be base_kw + amp_kw (since sin(π/2) = 1)
+        let demand = load.demand_kw(0);
+        assert!((demand - 3.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_no_negative_demand() {
+        // Configure for potential negative values
+        let mut load = BaseLoad::new(0.5, 1.0, 0.0, 0.0, 4, 42);
+
+        // At 3/4 day (3π/2), base_kw - amp_kw would be negative, but should be clamped to 0
+        let demand = load.demand_kw(3);
+        assert_eq!(demand, 0.0);
+    }
+
+    #[test]
+    fn test_random_noise_deterministic() {
+        // Same seed should produce same sequence of values
+        let mut load1 = BaseLoad::new(1.0, 0.0, 0.0, 0.5, 10, 42);
+        let mut load2 = BaseLoad::new(1.0, 0.0, 0.0, 0.5, 10, 42);
+
+        for i in 0..5 {
+            assert_eq!(load1.demand_kw(i), load2.demand_kw(i));
+        }
+    }
+
+    #[test]
+    fn test_different_seeds_produce_different_results() {
+        // Different seeds should produce different sequences
+        let mut load1 = BaseLoad::new(1.0, 0.0, 0.0, 0.5, 10, 42);
+        let mut load2 = BaseLoad::new(1.0, 0.0, 0.0, 0.5, 10, 43);
+
+        let mut all_same = true;
+        for i in 0..5 {
+            if (load1.demand_kw(i) - load2.demand_kw(i)).abs() > 1e-5 {
+                all_same = false;
+                break;
+            }
+        }
+
+        assert!(!all_same);
+    }
+}
