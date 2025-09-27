@@ -101,6 +101,6 @@ mod tests {
 
         let mut was_called = false;
         clock.run(|_| was_called = true);
-        assert_eq!(was_called, false);
+        assert!(!was_called);
     }
 }
