@@ -20,18 +20,33 @@ The simulation advances in fast-forwarded, discrete time steps (e.g. 5-minute in
 
 Stay tuned!
 
+## Usage
+
+Running the default binary will trigger a 20-step simulation with a simple baseload model. This will output the modeled baseload demand (in kW) at each time step:
+
+```bash
+cargo run --release
+```
+
+### Expected outputs:
+```
+t=0, baseload_kw=1.35
+t=1, baseload_kw=1.39
+t=2, baseload_kw=1.46
+t=3, baseload_kw=1.48
+...
+t=19, baseload_kw=1.22
+```
+
+
+
 ## ⏱️ Running the simulation clock
 
 The simulation clock drives the virtual power plant model by advancing in fixed time steps. It can be run using the `Clock` struct, which provides methods to advance time step-by-step or run a function at each time step until completion.
 
 ### Example
 
-You can run the simple clock demo with: 
-``` bash
-cargo run
-```
-
-or include the `Clock` in your own project as follows:
+You can run the simple `Clock` with:
 
 ```rust
 use vpp_sim::sim::clock::Clock;
@@ -40,16 +55,27 @@ let mut clock = Clock::new(5);
 clock.run(|t| println!("Step {}", t));
 ```
 
-### Expected Outputs
+## ⚡ Running the BaseLoad model
 
-For a clock configured with 5 total steps, the output will be:
+The `BaseLoad` model simulates the baseline electricity consumption of a household. It can be run using the `BaseLoad` struct, which provides methods to get the load at each time step.
 
-```
-Step 0
-Step 1
-Step 2
-Step 3
-Step 4
+You can run the simple `BaseLoad` with:
+
+```rust
+use vpp_sim::sim::load::BaseLoad;
+
+// Create a baseload with typical parameters
+let mut load = BaseLoad::new(
+    1.0,   // base_kw - average consumption
+    0.5,   // amp_kw - daily variation
+    0.0,   // phase_rad - no phase shift (minimum at midnight)
+    0.05,  // noise_std - small random variation
+    24,    // steps_per_day - hourly resolution
+    42,    // seed - for reproducible randomness
+);
+
+// Get demand at specific time step
+let demand = load.demand_kw(12); // demand at noon
 ```
 
 ## License
