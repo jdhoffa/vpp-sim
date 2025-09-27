@@ -16,7 +16,7 @@ The simulation advances in fast-forwarded, discrete time steps (e.g. 5-minute in
 
 ## Project Status
 
-🚧 **Work in Progress** – This repository currently contains no runnable code. All designs, components, and interfaces are under active development.
+🚧 **Work in Progress** – This repository is under active development and working towards MVP status.   
 
 Stay tuned!
 
