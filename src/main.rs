@@ -1,17 +1,14 @@
-mod devices {
-    pub mod baseload;
-    pub mod solar;
-}
+mod devices;
+mod sim;
 
-mod sim {
-    pub mod clock;
-}
+use devices::{BaseLoad, Device, SolarPv};
+use sim::clock::Clock;
 
 fn main() {
     let steps_per_day = 96; // 15-minute intervals
-    let mut clock = sim::clock::Clock::new(steps_per_day * 2); // Simulate 2 days
+    let mut clock = Clock::new(steps_per_day * 2); // Simulate 2 days
 
-    let mut load = devices::baseload::BaseLoad::new(
+    let mut load = BaseLoad::new(
         0.8,           /* base_kw */
         0.7,           /* amp_kw */
         1.2,           /* phase_rad */
@@ -20,7 +17,9 @@ fn main() {
         42,            /* seed */
     );
 
-    let mut pv = devices::solar::SolarPv::new(
+    let baseload_device = load.device_type();
+
+    let mut pv = SolarPv::new(
         5.0,           /* kw_peak */
         steps_per_day, /* steps_per_day */
         24,            /* sunrise_idx (6 AM) */
@@ -29,12 +28,15 @@ fn main() {
         42,            /* seed */
     );
 
+    let solar_device = pv.device_type();
+
     clock.run(|t| {
-        let base_demand_kw = load.demand_kw(t);
-        let solar_kw = pv.gen_kw(t);
+        let base_demand_kw = load.power_kw(t);
+        let solar_kw = pv.power_kw(t); // Note: power_kw returns negative for generation
         let net_kw = base_demand_kw - solar_kw;
         println!(
-            "t={t}, baseload_kw={base_demand_kw:.2}, solar_kw={solar_kw:.2}, net_kw={net_kw:.2}"
+            "Timestep {}: {} demand = {:.3} kW, {} generation = {:.3} kW, Net = {:.3} kW",
+            t, baseload_device, base_demand_kw, solar_device, solar_kw, net_kw
         );
         // later: push `kw` into feeder aggregator
     })
