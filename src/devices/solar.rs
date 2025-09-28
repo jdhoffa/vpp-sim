@@ -112,10 +112,6 @@ impl SolarPv {
         0.5 * (1.0 - (2.0 * std::f32::consts::PI * x).cos())
     }
 
-    // pub fn power_kw(&mut self, timestep: usize) -> f32 {
-    //     // Return negative for generation (according to power flow convention)
-    //     -self.power_kw(timestep)
-    // }
 }
 
 impl Device for SolarPv {
