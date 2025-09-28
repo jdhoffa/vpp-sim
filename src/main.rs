@@ -33,7 +33,7 @@ fn main() {
     clock.run(|t| {
         let base_demand_kw = load.power_kw(t);
         let solar_kw = pv.power_kw(t); // Note: power_kw returns negative for generation
-        let net_kw = base_demand_kw - solar_kw;
+        let net_kw = base_demand_kw + solar_kw;
         println!(
             "Timestep {}: {} demand = {:.3} kW, {} generation = {:.3} kW, Net = {:.3} kW",
             t, baseload_device, base_demand_kw, solar_device, solar_kw, net_kw
