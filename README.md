@@ -84,7 +84,7 @@ The `SolarPV` model simulates the electricity generation from a residential sola
 You can run the simple `SolarPV` with:
 
 ```rust
-use vpp_sim::sim::solar::SolarPV;
+use vpp_sim::devices::solar::SolarPv;
 // Create a solar PV system with a specified capacity
 let mut pv = SolarPv::new(
     5.0,   // kw_peak - maximum output in ideal conditions
