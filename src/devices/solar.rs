@@ -1,4 +1,5 @@
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use crate::devices::types::{Device, gaussian_noise};
+use rand::{SeedableRng, rngs::StdRng};
 
 /// A solar PV generator that models power generation based on daylight hours.
 ///
@@ -22,7 +23,7 @@ use rand::{Rng, SeedableRng, rngs::StdRng};
 /// );
 ///
 /// // Get generation at noon (step 12)
-/// let generation = pv.gen_kw(12);
+/// let generation = pv.power_kw(12);
 /// ```
 #[derive(Debug, Clone)]
 pub struct SolarPv {
@@ -111,6 +112,9 @@ impl SolarPv {
         0.5 * (1.0 - (2.0 * std::f32::consts::PI * x).cos())
     }
 
+}
+
+impl Device for SolarPv {
     /// Calculates the power generation at a specific time step.
     ///
     /// This method computes the power generation as a combination of:
@@ -126,20 +130,21 @@ impl SolarPv {
     /// # Returns
     ///
     /// The power generation in kilowatts at the specified time step
-    pub fn gen_kw(&mut self, timestep: usize) -> f32 {
+    fn power_kw(&mut self, timestep: usize) -> f32 {
         let frac = self.daylight_frac(timestep);
         if frac <= 0.0 {
             return 0.0;
         }
 
-        // Gaussian-ish noise via Box–Muller
-        let (mut u1, u2): (f32, f32) = (Rng::random(&mut self.rng), Rng::random(&mut self.rng));
-        u1 = u1.clamp(1e-6, 1.0);
-        let z0 = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f32::consts::PI * u2).cos(); // ~N(0,1)
-        let mult = 1.0 + z0 * self.noise_std;
+        let noise_mult = 1.0 + gaussian_noise(&mut self.rng, self.noise_std);
+        let kw = self.kw_peak * frac * noise_mult;
 
-        let kw = self.kw_peak * frac * mult;
-        kw.max(0.0)
+        // Return negative for generation (according to power flow convention)
+        -kw.max(0.0)
+    }
+
+    fn device_type(&self) -> &'static str {
+        "SolarPV"
     }
 }
 
@@ -214,10 +219,10 @@ mod tests {
         let mut pv = SolarPv::new(5.0, 24, 6, 18, 0.0, 42);
 
         // No generation during night hours
-        assert_eq!(pv.gen_kw(0), 0.0); // Midnight
-        assert_eq!(pv.gen_kw(5), 0.0); // 5am
-        assert_eq!(pv.gen_kw(18), 0.0); // 6pm
-        assert_eq!(pv.gen_kw(23), 0.0); // 11pm
+        assert_eq!(pv.power_kw(0), 0.0); // Midnight
+        assert_eq!(pv.power_kw(5), 0.0); // 5am
+        assert_eq!(pv.power_kw(18), 0.0); // 6pm
+        assert_eq!(pv.power_kw(23), 0.0); // 11pm
     }
 
     #[test]
@@ -225,7 +230,7 @@ mod tests {
         let mut pv = SolarPv::new(5.0, 24, 6, 18, 0.0, 42);
 
         // With noise_std = 0, noon should generate close to peak
-        let noon_gen = pv.gen_kw(12);
+        let noon_gen = -pv.power_kw(12); // power_kw returns negative for generation
         assert!(noon_gen > 4.9 && noon_gen <= 5.0);
     }
 
@@ -236,7 +241,7 @@ mod tests {
 
         // Same seed should produce identical generation
         for t in 0..24 {
-            assert_eq!(pv1.gen_kw(t), pv2.gen_kw(t));
+            assert_eq!(pv1.power_kw(t), pv2.power_kw(t));
         }
     }
 
@@ -249,7 +254,7 @@ mod tests {
         let mut all_same = true;
         for t in 6..18 {
             // Check only daylight hours
-            if (pv1.gen_kw(t) - pv2.gen_kw(t)).abs() > 1e-5 {
+            if (pv1.power_kw(t) - pv2.power_kw(t)).abs() > 1e-5 {
                 all_same = false;
                 break;
             }
@@ -264,7 +269,7 @@ mod tests {
 
         // Generation should repeat in daily cycles
         for t in 0..24 {
-            assert_eq!(pv.gen_kw(t), pv.gen_kw(t + 24));
+            assert_eq!(pv.power_kw(t), pv.power_kw(t + 24));
         }
     }
 }

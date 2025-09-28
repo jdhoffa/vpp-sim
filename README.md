@@ -31,14 +31,14 @@ cargo run --release
 
 #### Expected outputs:
 ```
-t=0, baseload_kw=1.35, solar_kw=0.00, net_kw=1.35
-t=1, baseload_kw=1.39, solar_kw=0.00, net_kw=1.39
-t=2, baseload_kw=1.46, solar_kw=0.00, net_kw=1.46
-t=3, baseload_kw=1.48, solar_kw=0.00, net_kw=1.48
+Timestep 0: BaseLoad demand = 1.353 kW, SolarPV generation = 0.000 kW, Net = 1.353 kW
+Timestep 1: BaseLoad demand = 1.387 kW, SolarPV generation = 0.000 kW, Net = 1.387 kW
+Timestep 2: BaseLoad demand = 1.463 kW, SolarPV generation = 0.000 kW, Net = 1.463 kW
 ...
-t=48, baseload_kw=0.18, solar_kw=5.31, net_kw=-5.13 # peak solar generation at noon
+# peak solar generation at noon
+Timestep 48: BaseLoad demand = 0.183 kW, SolarPV generation = -5.310 kW, Net = -5.127 kW
 ...
-t=95, baseload_kw=1.39, solar_kw=0.00, net_kw=1.39
+Timestep 95: BaseLoad demand = 1.393 kW, SolarPV generation = 0.000 kW, Net = 1.393 kW
 ```
 
 
