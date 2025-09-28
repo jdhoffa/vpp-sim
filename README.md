@@ -94,8 +94,8 @@ let mut pv = SolarPv::new(
     0.05,  // noise_std - small random variation for cloud cover
     42,    // seed - for reproducible randomness
 );
-// Get generation at specific time step based on daylight fraction
-let generation = pv.gen_kw(0.5); // 50% daylight fraction
+// Get generation at specific time step (e.g., at noon)
+let generation = pv.gen_kw(12); // generation at timestep 12 (noon)
 ```
 
 ## License
