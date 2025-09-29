@@ -1,4 +1,4 @@
-use crate::devices::types::{Device, gaussian_noise};
+use crate::devices::types::{Device, DeviceContext, gaussian_noise};
 use rand::{SeedableRng, rngs::StdRng};
 
 /// A baseload generator that models daily electricity consumption patterns.
@@ -96,8 +96,8 @@ impl Device for BaseLoad {
     /// # Returns
     ///
     /// The power demand in kilowatts at the specified time step
-    fn power_kw(&mut self, timestep: usize) -> f32 {
-        let day_pos = (timestep % self.steps_per_day) as f32 / self.steps_per_day as f32; // [0,1)
+    fn power_kw(&mut self, context: &DeviceContext) -> f32 {
+        let day_pos = (context.timestep % self.steps_per_day) as f32 / self.steps_per_day as f32; // [0,1)
         let angle = 2.0 * std::f32::consts::PI * day_pos + self.phase_rad;
         let sinus = angle.sin();
 
@@ -139,18 +139,34 @@ mod tests {
         let mut load = BaseLoad::new(2.0, 1.0, 0.0, 0.0, 4, 42);
 
         // At phase 0, first step should be base_kw (since sin(0) = 0)
-        assert_eq!(load.power_kw(0), 2.0);
+        let context = DeviceContext {
+            timestep: 0,
+            setpoint_kw: None,
+        };
+        assert_eq!(load.power_kw(&context), 2.0);
 
         // At quarter day (π/2), should be base_kw + amp_kw (since sin(π/2) = 1)
-        let demand = load.power_kw(1);
+        let context = DeviceContext {
+            timestep: 1,
+            setpoint_kw: None,
+        };
+        let demand = load.power_kw(&context);
         assert!((demand - 3.0).abs() < 1e-5);
 
         // At half day (π), should be base_kw (since sin(π) = 0)
-        let demand = load.power_kw(2);
+        let context = DeviceContext {
+            timestep: 2,
+            setpoint_kw: None,
+        };
+        let demand = load.power_kw(&context);
         assert!((demand - 2.0).abs() < 1e-5);
 
         // At 3/4 day (3π/2), should be base_kw - amp_kw (since sin(3π/2) = -1)
-        let demand = load.power_kw(3);
+        let context = DeviceContext {
+            timestep: 3,
+            setpoint_kw: None,
+        };
+        let demand = load.power_kw(&context);
         assert!((demand - 1.0).abs() < 1e-5);
     }
 
@@ -160,7 +176,11 @@ mod tests {
         let mut load = BaseLoad::new(2.0, 1.0, PI / 2.0, 0.0, 4, 42);
 
         // At phase π/2, first step should be base_kw + amp_kw (since sin(π/2) = 1)
-        let demand = load.power_kw(0);
+        let context = DeviceContext {
+            timestep: 0,
+            setpoint_kw: None,
+        };
+        let demand = load.power_kw(&context);
         assert!((demand - 3.0).abs() < 1e-5);
     }
 
@@ -170,7 +190,11 @@ mod tests {
         let mut load = BaseLoad::new(0.5, 1.0, 0.0, 0.0, 4, 42);
 
         // At 3/4 day (3π/2), base_kw - amp_kw would be negative, but should be clamped to 0
-        let demand = load.power_kw(3);
+        let context = DeviceContext {
+            timestep: 3,
+            setpoint_kw: None,
+        };
+        let demand = load.power_kw(&context);
         assert_eq!(demand, 0.0);
     }
 
@@ -181,7 +205,11 @@ mod tests {
         let mut load2 = BaseLoad::new(1.0, 0.0, 0.0, 0.5, 10, 42);
 
         for i in 0..5 {
-            assert_eq!(load1.power_kw(i), load2.power_kw(i));
+            let context = DeviceContext {
+                timestep: i,
+                setpoint_kw: None,
+            };
+            assert_eq!(load1.power_kw(&context), load2.power_kw(&context));
         }
     }
 
@@ -193,7 +221,11 @@ mod tests {
 
         let mut all_same = true;
         for i in 0..5 {
-            if (load1.power_kw(i) - load2.power_kw(i)).abs() > 1e-5 {
+            let context = DeviceContext {
+                timestep: i,
+                setpoint_kw: None,
+            };
+            if (load1.power_kw(&context) - load2.power_kw(&context)).abs() > 1e-5 {
                 all_same = false;
                 break;
             }

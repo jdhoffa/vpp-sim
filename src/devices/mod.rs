@@ -8,3 +8,4 @@ pub mod types;
 pub use baseload::BaseLoad;
 pub use solar::SolarPv;
 pub use types::Device;
+pub use types::DeviceContext;

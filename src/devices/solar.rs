@@ -1,4 +1,4 @@
-use crate::devices::types::{Device, gaussian_noise};
+use crate::devices::types::{Device, DeviceContext, gaussian_noise};
 use rand::{SeedableRng, rngs::StdRng};
 
 /// A solar PV generator that models power generation based on daylight hours.
@@ -111,7 +111,6 @@ impl SolarPv {
         // Half-cosine dome: 0 -> 1 -> 0 across daylight
         0.5 * (1.0 - (2.0 * std::f32::consts::PI * x).cos())
     }
-
 }
 
 impl Device for SolarPv {
@@ -130,8 +129,8 @@ impl Device for SolarPv {
     /// # Returns
     ///
     /// The power generation in kilowatts at the specified time step
-    fn power_kw(&mut self, timestep: usize) -> f32 {
-        let frac = self.daylight_frac(timestep);
+    fn power_kw(&mut self, context: &DeviceContext) -> f32 {
+        let frac = self.daylight_frac(context.timestep);
         if frac <= 0.0 {
             return 0.0;
         }
@@ -219,10 +218,29 @@ mod tests {
         let mut pv = SolarPv::new(5.0, 24, 6, 18, 0.0, 42);
 
         // No generation during night hours
-        assert_eq!(pv.power_kw(0), 0.0); // Midnight
-        assert_eq!(pv.power_kw(5), 0.0); // 5am
-        assert_eq!(pv.power_kw(18), 0.0); // 6pm
-        assert_eq!(pv.power_kw(23), 0.0); // 11pm
+        let context = DeviceContext {
+            timestep: 0,
+            setpoint_kw: None,
+        };
+        assert_eq!(pv.power_kw(&context), 0.0); // Midnight
+
+        let context = DeviceContext {
+            timestep: 5,
+            setpoint_kw: None,
+        };
+        assert_eq!(pv.power_kw(&context), 0.0); // 5am
+
+        let context = DeviceContext {
+            timestep: 18,
+            setpoint_kw: None,
+        };
+        assert_eq!(pv.power_kw(&context), 0.0); // 6pm
+
+        let context = DeviceContext {
+            timestep: 23,
+            setpoint_kw: None,
+        };
+        assert_eq!(pv.power_kw(&context), 0.0); // 11pm
     }
 
     #[test]
@@ -230,7 +248,11 @@ mod tests {
         let mut pv = SolarPv::new(5.0, 24, 6, 18, 0.0, 42);
 
         // With noise_std = 0, noon should generate close to peak
-        let noon_gen = -pv.power_kw(12); // power_kw returns negative for generation
+        let context = DeviceContext {
+            timestep: 12,
+            setpoint_kw: None,
+        };
+        let noon_gen = -pv.power_kw(&context); // power_kw returns negative for generation
         assert!(noon_gen > 4.9 && noon_gen <= 5.0);
     }
 
@@ -241,7 +263,11 @@ mod tests {
 
         // Same seed should produce identical generation
         for t in 0..24 {
-            assert_eq!(pv1.power_kw(t), pv2.power_kw(t));
+            let context = DeviceContext {
+                timestep: t,
+                setpoint_kw: None,
+            };
+            assert_eq!(pv1.power_kw(&context), pv2.power_kw(&context));
         }
     }
 
@@ -254,7 +280,11 @@ mod tests {
         let mut all_same = true;
         for t in 6..18 {
             // Check only daylight hours
-            if (pv1.power_kw(t) - pv2.power_kw(t)).abs() > 1e-5 {
+            let context = DeviceContext {
+                timestep: t,
+                setpoint_kw: None,
+            };
+            if (pv1.power_kw(&context) - pv2.power_kw(&context)).abs() > 1e-5 {
                 all_same = false;
                 break;
             }
@@ -269,7 +299,15 @@ mod tests {
 
         // Generation should repeat in daily cycles
         for t in 0..24 {
-            assert_eq!(pv.power_kw(t), pv.power_kw(t + 24));
+            let context = DeviceContext {
+                timestep: t,
+                setpoint_kw: None,
+            };
+            let context_next_day = DeviceContext {
+                timestep: t + 24,
+                setpoint_kw: None,
+            };
+            assert_eq!(pv.power_kw(&context), pv.power_kw(&context_next_day));
         }
     }
 }

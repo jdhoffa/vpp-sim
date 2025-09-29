@@ -2,6 +2,16 @@
 
 use rand::{Rng, rngs::StdRng};
 
+/// Contextual information passed to devices during power calculations.
+/// Includes the current timestep and optional setpoints for controllable devices.
+/// # Fields
+/// * `timestep` - Current simulation timestep
+/// * `setpoint_kw` - Optional power setpoint for controllable devices (kW)
+pub struct DeviceContext {
+    pub timestep: usize,
+    pub setpoint_kw: Option<f32>,
+}
+
 /// Trait defining a device that can produce or consume electricity.
 ///
 /// This trait provides a common interface for all devices in the simulation,
@@ -14,12 +24,14 @@ pub trait Device {
     ///
     /// # Arguments
     ///
-    /// * `timestep` - The simulation time step
+    /// * `context` - Contextual information about the device and simulation state, like:
+    ///  - `timestep`: Current simulation time step
+    ///  - `setpoint_kw`: Optional power setpoint for controllable devices
     ///
     /// # Returns
     ///
     /// Power in kilowatts (kW) at the specified time step
-    fn power_kw(&mut self, timestep: usize) -> f32;
+    fn power_kw(&mut self, context: &DeviceContext) -> f32;
 
     /// Returns a human-readable type name for the device.
     fn device_type(&self) -> &'static str;
