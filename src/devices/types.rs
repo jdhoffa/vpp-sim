@@ -12,6 +12,24 @@ pub struct DeviceContext {
     pub setpoint_kw: Option<f32>,
 }
 
+impl DeviceContext {
+    /// Creates a new DeviceContext with the given timestep and no setpoint.
+    pub fn new(timestep: usize) -> Self {
+        Self {
+            timestep,
+            setpoint_kw: None,
+        }
+    }
+
+    /// Creates a new DeviceContext with the given timestep and setpoint.
+    pub fn with_setpoint(timestep: usize, setpoint_kw: f32) -> Self {
+        Self {
+            timestep,
+            setpoint_kw: Some(setpoint_kw),
+        }
+    }
+}
+
 /// Trait defining a device that can produce or consume electricity.
 ///
 /// This trait provides a common interface for all devices in the simulation,
