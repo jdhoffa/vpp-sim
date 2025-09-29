@@ -43,28 +43,17 @@ fn main() {
     let battery_device = battery.device_type();
 
     clock.run(|t| {
-        let base_context = DeviceContext {
-            timestep: t,
-            setpoint_kw: None,
-        };
+        let context = DeviceContext::new(t);
 
-        let solar_context = DeviceContext {
-            timestep: t,
-            setpoint_kw: None,
-        };
-
-        let base_demand_kw = load.power_kw(&base_context);
-        let solar_kw = pv.power_kw(&solar_context);
+        let base_demand_kw = load.power_kw(&context);
+        let solar_kw = pv.power_kw(&context);
 
         // Simple battery control strategy:
         // - If solar excess (negative net load), charge battery with excess
         // - If net load positive, discharge battery to meet load, up to max discharge
         let net_without_battery = base_demand_kw + solar_kw;
 
-        let battery_context = DeviceContext {
-            timestep: t,
-            setpoint_kw: Some(-net_without_battery), // Negative to charge, positive to discharge
-        };
+        let battery_context = DeviceContext::with_setpoint(context.timestep, -net_without_battery);
 
         let battery_kw = battery.power_kw(&battery_context);
         let net_with_battery = net_without_battery + battery_kw;
