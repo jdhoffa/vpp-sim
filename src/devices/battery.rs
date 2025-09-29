@@ -190,10 +190,7 @@ mod tests {
     #[test]
     fn test_charge_power_limit() {
         let mut battery = Battery::new(10.0, 0.5, 5.0, 5.0, 1.0, 1.0, 96);
-        let context = DeviceContext {
-            timestep: 0,
-            setpoint_kw: Some(-10.0),
-        };
+        let context = DeviceContext::with_setpoint(0, -10.0);
         let actual_kw = battery.power_kw(&context);
         assert_eq!(actual_kw, -5.0); // Should be limited to -5kW
     }
@@ -201,10 +198,7 @@ mod tests {
     #[test]
     fn test_discharge_power_limit() {
         let mut battery = Battery::new(10.0, 0.5, 5.0, 5.0, 1.0, 1.0, 96);
-        let context = DeviceContext {
-            timestep: 0,
-            setpoint_kw: Some(10.0),
-        };
+        let context = DeviceContext::with_setpoint(0, 10.0);
         let actual_kw = battery.power_kw(&context);
         assert_eq!(actual_kw, 5.0); // Should be limited to 5kW
     }
@@ -216,10 +210,7 @@ mod tests {
         let mut battery = Battery::new(10.0, 0.1, 5.0, 5.0, 1.0, 1.0, 96);
 
         // Try to discharge at 5kW
-        let context = DeviceContext {
-            timestep: 0,
-            setpoint_kw: Some(5.0),
-        };
+        let context = DeviceContext::with_setpoint(0, 5.0);
         let actual_kw = battery.power_kw(&context);
         assert_eq!(actual_kw, 4.0); // Should be limited by available energy
 
@@ -234,10 +225,7 @@ mod tests {
         let mut battery = Battery::new(10.0, 0.9, 5.0, 5.0, 1.0, 1.0, 96);
 
         // Try to charge at 5kW
-        let context = DeviceContext {
-            timestep: 0,
-            setpoint_kw: Some(-5.0),
-        };
+        let context = DeviceContext::with_setpoint(0, -5.0);
         let actual_kw = battery.power_kw(&context);
         assert!((actual_kw - (-4.0)).abs() < 1e-5); // Should be limited by available capacity
 
@@ -253,10 +241,7 @@ mod tests {
 
         // Charge with 1kW for 6 hours = 6kWh
         // Should result in 6kWh * 0.9 = 5.4kWh stored
-        let context = DeviceContext {
-            timestep: 0,
-            setpoint_kw: Some(-1.0),
-        };
+        let context = DeviceContext::with_setpoint(0, -1.0);
         battery.power_kw(&context);
 
         // Expected SOC: 5.4kWh / 10kWh = 0.54
@@ -271,10 +256,7 @@ mod tests {
 
         // Discharge with 1kW for 6 hours = 6kWh
         // Should require 6kWh / 0.8 = 7.5kWh from battery
-        let context = DeviceContext {
-            timestep: 0,
-            setpoint_kw: Some(1.0),
-        };
+        let context = DeviceContext::with_setpoint(0, 1.0);
         battery.power_kw(&context);
 
         // Expected SOC: 0.5 - (7.5kWh / 10kWh) = 0.5 - 0.75 = -0.25, clamped to 0.0
@@ -288,20 +270,14 @@ mod tests {
 
         // Fully charge the battery
         while battery.soc < 0.99 {
-            let context = DeviceContext {
-                timestep: 0,
-                setpoint_kw: Some(-2.0),
-            };
+            let context = DeviceContext::with_setpoint(0, -2.0);
             battery.power_kw(&context);
         }
 
         // Now fully discharge
         let mut energy_delivered = 0.0;
         while battery.soc > 0.01 {
-            let context = DeviceContext {
-                timestep: 0,
-                setpoint_kw: Some(2.0),
-            };
+            let context = DeviceContext::with_setpoint(0, 2.0);
             let kw = battery.power_kw(&context);
             let dt_hours = 24.0 / battery.steps_per_day as f32;
             energy_delivered += kw * dt_hours;
