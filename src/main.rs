@@ -31,18 +31,13 @@ fn main() {
     let solar_device = pv.device_type();
 
     clock.run(|t| {
-        let base_context = DeviceContext {
+        let context = DeviceContext {
             timestep: t,
             setpoint_kw: None,
         };
 
-        let solar_context = DeviceContext {
-            timestep: t,
-            setpoint_kw: None,
-        };
-
-        let base_demand_kw = load.power_kw(&base_context);
-        let solar_kw = pv.power_kw(&solar_context);
+        let base_demand_kw = load.power_kw(&context);
+        let solar_kw = pv.power_kw(&context);
 
         println!(
             "Timestep {}: {}={:.2}kW, {}={:.2}kW",
