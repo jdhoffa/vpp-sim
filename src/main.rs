@@ -1,7 +1,7 @@
 mod devices;
 mod sim;
 
-use devices::{BaseLoad, Device, SolarPv};
+use devices::{BaseLoad, Device, DeviceContext, SolarPv};
 use sim::clock::Clock;
 
 fn main() {
@@ -31,12 +31,22 @@ fn main() {
     let solar_device = pv.device_type();
 
     clock.run(|t| {
-        let base_demand_kw = load.power_kw(t);
-        let solar_kw = pv.power_kw(t); // Note: power_kw returns negative for generation
-        let net_kw = base_demand_kw + solar_kw;
+        let base_context = DeviceContext {
+            timestep: t,
+            setpoint_kw: None,
+        };
+
+        let solar_context = DeviceContext {
+            timestep: t,
+            setpoint_kw: None,
+        };
+
+        let base_demand_kw = load.power_kw(&base_context);
+        let solar_kw = pv.power_kw(&solar_context);
+
         println!(
-            "Timestep {}: {} demand = {:.3} kW, {} generation = {:.3} kW, Net = {:.3} kW",
-            t, baseload_device, base_demand_kw, solar_device, solar_kw, net_kw
+            "Timestep {}: {}={:.2}kW, {}={:.2}kW",
+            t, baseload_device, base_demand_kw, solar_device, solar_kw
         );
         // later: push `kw` into feeder aggregator
     })
