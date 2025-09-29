@@ -14,6 +14,7 @@ use crate::devices::types::{Device, DeviceContext};
 ///
 /// ```
 /// use vpp_sim::devices::battery::Battery;
+/// use vpp_sim::devices::types::DeviceContext;
 ///
 /// // Create a 10kWh battery at 50% SOC with 5kW charge/discharge limits
 /// let mut battery = Battery::new(
@@ -27,10 +28,12 @@ use crate::devices::types::{Device, DeviceContext};
 /// );
 ///
 /// // Command battery to discharge at 3kW
-/// let actual_kw = battery.power_kw(3.0);
+/// let context = DeviceContext::with_setpoint(0, 3.0);
+/// let actual_kw = battery.power_kw(&context);
 ///
 /// // Command battery to charge at 2kW
-/// let actual_kw = battery.power_kw(-2.0);
+/// let context = DeviceContext::with_setpoint(1, -2.0);
+/// let actual_kw = battery.power_kw(&context);
 /// ```
 #[derive(Debug, Clone)]
 pub struct Battery {
