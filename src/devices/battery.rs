@@ -37,7 +37,7 @@ pub struct Battery {
     /// Battery capacity in kilowatt-hours
     pub capacity_kwh: f32,
 
-    /// State of charge in percent (0..1.0)
+    /// State of charge as a fraction (0.0 to 1.0)
     pub soc: f32,
 
     /// Maximum charge power in kilowatts (positive value)
