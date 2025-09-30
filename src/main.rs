@@ -6,7 +6,7 @@ use sim::clock::Clock;
 
 fn main() {
     let steps_per_day = 24; // 1-hr intervals
-    let mut clock = Clock::new(steps_per_day); // Simulate 1 days
+    let mut clock = Clock::new(steps_per_day); // Simulate 1 day
 
     let mut load = BaseLoad::new(
         0.8,           /* base_kw */
