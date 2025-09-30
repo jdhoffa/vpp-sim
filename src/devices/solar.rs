@@ -234,7 +234,7 @@ mod tests {
         let mut pv = SolarPv::new(5.0, 24, 6, 18, 0.0, 42);
 
         // With noise_std = 0, noon should generate close to peak
-        let noon_gen = pv.power_kw(&ctx(12)); // power_kw returns negative for generation
+        let noon_gen = pv.power_kw(&ctx(12)); // power_kw returns positive for generation
         assert!(noon_gen > 4.9 && noon_gen <= 5.0);
     }
 
