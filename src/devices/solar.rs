@@ -138,8 +138,8 @@ impl Device for SolarPv {
         let noise_mult = 1.0 + gaussian_noise(&mut self.rng, self.noise_std);
         let kw = self.kw_peak * frac * noise_mult;
 
-        // Return negative for generation (according to power flow convention)
-        -kw.max(0.0)
+        // Return positive for generation (according to power flow convention)
+        kw.max(0.0)
     }
 
     fn device_type(&self) -> &'static str {
@@ -234,7 +234,7 @@ mod tests {
         let mut pv = SolarPv::new(5.0, 24, 6, 18, 0.0, 42);
 
         // With noise_std = 0, noon should generate close to peak
-        let noon_gen = -pv.power_kw(&ctx(12)); // power_kw returns negative for generation
+        let noon_gen = pv.power_kw(&ctx(12)); // power_kw returns negative for generation
         assert!(noon_gen > 4.9 && noon_gen <= 5.0);
     }
 
