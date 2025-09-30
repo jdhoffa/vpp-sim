@@ -118,10 +118,7 @@ mod tests {
 
     // Helper function to create a context with just a timestep
     fn ctx(t: usize) -> DeviceContext {
-        DeviceContext {
-            timestep: t,
-            setpoint_kw: None,
-        }
+        DeviceContext::new(t)
     }
 
     #[test]

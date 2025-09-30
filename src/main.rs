@@ -1,7 +1,7 @@
 mod devices;
 mod sim;
 
-use devices::{BaseLoad, Device, DeviceContext, SolarPv};
+use devices::{BaseLoad, Battery, Device, DeviceContext, SolarPv};
 use sim::clock::Clock;
 
 fn main() {
@@ -30,18 +30,45 @@ fn main() {
 
     let solar_device = pv.device_type();
 
+    let mut battery = Battery::new(
+        10.0,          /* capacity_kwh */
+        0.5,           /* initial_soc */
+        5.0,           /* max_charge_kw */
+        5.0,           /* max_discharge_kw */
+        0.95,          /* eta_c */
+        0.95,          /* eta_d */
+        steps_per_day, /* steps_per_day */
+    );
+
+    let battery_device = battery.device_type();
+
     clock.run(|t| {
-        let context = DeviceContext {
-            timestep: t,
-            setpoint_kw: None,
-        };
+        let context = DeviceContext::new(t);
 
         let base_demand_kw = load.power_kw(&context);
         let solar_kw = pv.power_kw(&context);
 
+        // Simple battery control strategy:
+        // - If solar excess (negative net load), charge battery with excess
+        // - If net load positive, discharge battery to meet load, up to max discharge
+        let net_without_battery = base_demand_kw + solar_kw;
+
+        let battery_context = DeviceContext::with_setpoint(context.timestep, -net_without_battery);
+
+        let battery_kw = battery.power_kw(&battery_context);
+        let net_with_battery = net_without_battery + battery_kw;
+
         println!(
-            "Timestep {}: {}={:.2}kW, {}={:.2}kW",
-            t, baseload_device, base_demand_kw, solar_device, solar_kw
+            "Timestep {}: {}={:.2}kW, {}={:.2}kW, {}={:.2}kW (SoC={:.1}%), Net={:.2}kW",
+            t,
+            baseload_device,
+            base_demand_kw,
+            solar_device,
+            solar_kw,
+            battery_device,
+            battery_kw,
+            battery.soc * 100.0,
+            net_with_battery
         );
         // later: push `kw` into feeder aggregator
     })
