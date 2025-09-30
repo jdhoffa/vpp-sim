@@ -21,9 +21,13 @@ The simulation advances in fast-forwarded, discrete time steps (e.g. 5-minute in
 Stay tuned!
 
 ## Usage
+### Prerequisites
+- [Rust](https://www.rust-lang.org/tools/install) (latest stable version recommended)
+- [Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) (comes with Rust)
+
 ### 🧩 Running the demo simulation
 
-Running the default binary will trigger a demonstrative 96-step simulation (15-minute interval) with a simple baseload model. This will output the modeled baseload demand (in kW) at each time step:
+Running the default binary will trigger a demonstrative 24-step (1-hr interval) simulation with a simple baseload, solar and battery model:
 
 ```bash
 cargo run --release
@@ -31,72 +35,25 @@ cargo run --release
 
 #### Expected outputs:
 ```
-Timestep 0: BaseLoad demand = 1.353 kW, SolarPV generation = 0.000 kW, Net = 1.353 kW
-Timestep 1: BaseLoad demand = 1.387 kW, SolarPV generation = 0.000 kW, Net = 1.387 kW
-Timestep 2: BaseLoad demand = 1.463 kW, SolarPV generation = 0.000 kW, Net = 1.463 kW
+Time (Hr) 0: BaseLoad=1.35 kW, SolarPV=0.00 kW, Battery=1.35 kW (SoC=35.8%), Net=0.00 kW
+Time (Hr) 1: BaseLoad=1.42 kW, SolarPV=0.00 kW, Battery=1.42 kW (SoC=20.9%), Net=0.00 kW
 ...
-# peak solar generation at noon
-Timestep 48: BaseLoad demand = 0.183 kW, SolarPV generation = -5.310 kW, Net = -5.127 kW
+# high solar generation, battery charging
+Time (Hr) 10: BaseLoad=0.39 kW, SolarPV=3.73 kW, Battery=-3.34 kW (SoC=53.6%), Net=0.00 kW
+Time (Hr) 11: BaseLoad=0.18 kW, SolarPV=4.72 kW, Battery=-4.54 kW (SoC=96.7%), Net=0.00 kW
 ...
-Timestep 95: BaseLoad demand = 1.393 kW, SolarPV generation = 0.000 kW, Net = 1.393 kW
+# no solar generation, battery discharging
+Time (Hr) 20: BaseLoad=0.95 kW, SolarPV=0.00 kW, Battery=0.95 kW (SoC=76.3%), Net=0.00 kW
+Time (Hr) 21: BaseLoad=1.02 kW, SolarPV=0.00 kW, Battery=1.02 kW (SoC=65.5%), Net=0.00 kW
 ```
 
-
-### ⏱️ Running the simulation clock
-
-The simulation clock drives the virtual power plant model by advancing in fixed time steps. It can be run using the `Clock` struct, which provides methods to advance time step-by-step or run a function at each time step until completion.
-
-You can run the simple `Clock` with:
-
-```rust
-use vpp_sim::sim::clock::Clock;
-
-let mut clock = Clock::new(5);
-clock.run(|t| println!("Step {}", t));
+## Documentation
+The documentation for this project can be opened locally using:
+```bash
+cargo doc --open
 ```
 
-### ⚡ Running the BaseLoad model
-
-The `BaseLoad` model simulates the baseline electricity consumption of a household. It can be run using the `BaseLoad` struct, which provides methods to get the load at each time step.
-
-You can run the simple `BaseLoad` with:
-
-```rust
-use vpp_sim::sim::load::BaseLoad;
-
-// Create a baseload with typical parameters
-let mut load = BaseLoad::new(
-    1.0,   // base_kw - average consumption
-    0.5,   // amp_kw - daily variation
-    0.0,   // phase_rad - no phase shift (minimum at midnight)
-    0.05,  // noise_std - small random variation
-    24,    // steps_per_day - hourly resolution
-    42,    // seed - for reproducible randomness
-);
-
-// Get demand at specific time step
-let demand = load.demand_kw(12); // demand at noon
-```
-
-### ☀️ Running the Solar PV model
-The `SolarPV` model simulates the electricity generation from a residential solar photovoltaic system. It can be run using the `SolarPV` struct, which provides methods to get the generation at each time step based on a daylight fraction.
-
-You can run the simple `SolarPV` with:
-
-```rust
-use vpp_sim::devices::solar::SolarPv;
-// Create a solar PV system with a specified capacity
-let mut pv = SolarPv::new(
-    5.0,   // kw_peak - maximum output in ideal conditions
-    24,    // steps_per_day - hourly resolution
-    6,     // sunrise_idx - 6am sunrise
-    18,    // sunset_idx - 6pm sunset
-    0.05,  // noise_std - small random variation for cloud cover
-    42,    // seed - for reproducible randomness
-);
-// Get generation at specific time step (e.g., at noon)
-let generation = pv.gen_kw(12); // generation at timestep 12 (noon)
-```
+It contains detailed information about the architecture, modules, and usage of the simulator.
 
 ## License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
