@@ -5,6 +5,7 @@ mod sim;
 use devices::{BaseLoad, Battery, Device, DeviceContext, SolarPv};
 use forecast::NaiveForecast;
 use sim::clock::Clock;
+use sim::controller::NaiveRtController;
 use sim::feeder::Feeder;
 use sim::schedule::DayAheadSchedule;
 
@@ -54,6 +55,7 @@ fn main() {
 
     let battery_device = battery.device_type();
     let mut feeder = Feeder::new("MainFeeder");
+    let controller = NaiveRtController;
 
     clock.run(|t| {
         let context = DeviceContext::new(t);
@@ -63,12 +65,9 @@ fn main() {
         let target_kw = target_schedule[context.timestep];
         let solar_kw = pv.power_kw(&context);
 
-        // Simple battery control strategy:
-        // - If solar excess (negative net load), charge battery with excess
-        // - If net load positive, discharge battery to meet load, up to max discharge
         let net_without_battery = base_demand_kw - solar_kw;
-
-        let battery_context = DeviceContext::with_setpoint(context.timestep, net_without_battery);
+        let battery_setpoint_kw = controller.battery_setpoint_kw(net_without_battery, target_kw);
+        let battery_context = DeviceContext::with_setpoint(context.timestep, battery_setpoint_kw);
 
         let battery_kw = battery.power_kw(&battery_context);
         feeder.reset();
@@ -76,6 +75,7 @@ fn main() {
         feeder.add_net_kw(-solar_kw);
         feeder.add_net_kw(-battery_kw);
         let feeder_kw = feeder.net_kw();
+        let tracking_error_kw = feeder_kw - target_kw;
         let feeder_name = feeder.name();
 
         let soc = battery.soc * 100.0;
@@ -85,7 +85,8 @@ fn main() {
             Target={target_kw:.2} kW, \
             {solar_device}={solar_kw:.2} kW, \
             {battery_device}={battery_kw:.2} kW (SoC={soc:.1}%), \
-            {feeder_name}={feeder_kw:.2} kW"
+            {feeder_name}={feeder_kw:.2} kW, \
+            Error={tracking_error_kw:.2} kW"
         );
     })
 }
