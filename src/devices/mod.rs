@@ -2,12 +2,14 @@
 
 pub mod baseload;
 pub mod battery;
+pub mod ev_charger;
 pub mod solar;
 pub mod types;
 
 // Re-export the main types for convenience
 pub use baseload::BaseLoad;
 pub use battery::Battery;
+pub use ev_charger::EvCharger;
 pub use solar::SolarPv;
 pub use types::Device;
 pub use types::DeviceContext;
