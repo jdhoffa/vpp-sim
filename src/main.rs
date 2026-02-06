@@ -6,6 +6,7 @@ use devices::{BaseLoad, Battery, Device, DeviceContext, SolarPv};
 use forecast::NaiveForecast;
 use sim::clock::Clock;
 use sim::feeder::Feeder;
+use sim::schedule::DayAheadSchedule;
 
 fn main() {
     let steps_per_day = 24; // 1-hr intervals
@@ -28,6 +29,7 @@ fn main() {
     }
     let forecaster = NaiveForecast;
     let load_forecast = forecaster.forecast(&baseline, steps_per_day);
+    let target_schedule = DayAheadSchedule::flat_target(&load_forecast);
 
     let mut pv = SolarPv::new(
         5.0,           /* kw_peak */
@@ -58,6 +60,7 @@ fn main() {
 
         let base_demand_kw = load.power_kw(&context);
         let forecast_kw = load_forecast[context.timestep];
+        let target_kw = target_schedule[context.timestep];
         let solar_kw = pv.power_kw(&context);
 
         // Simple battery control strategy:
@@ -79,6 +82,7 @@ fn main() {
         println!(
             "Time (Hr) {t}: {baseload_device}={base_demand_kw:.2} kW, \
             Forecast={forecast_kw:.2} kW, \
+            Target={target_kw:.2} kW, \
             {solar_device}={solar_kw:.2} kW, \
             {battery_device}={battery_kw:.2} kW (SoC={soc:.1}%), \
             {feeder_name}={feeder_kw:.2} kW"
