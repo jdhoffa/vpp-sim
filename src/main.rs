@@ -1,7 +1,9 @@
 mod devices;
+mod forecast;
 mod sim;
 
 use devices::{BaseLoad, Battery, Device, DeviceContext, SolarPv};
+use forecast::NaiveForecast;
 use sim::clock::Clock;
 use sim::feeder::Feeder;
 
@@ -19,6 +21,13 @@ fn main() {
     );
 
     let baseload_device = load.device_type();
+    let mut baseline_load = load.clone();
+    let mut baseline = Vec::with_capacity(steps_per_day);
+    for t in 0..steps_per_day {
+        baseline.push(baseline_load.power_kw(&DeviceContext::new(t)));
+    }
+    let forecaster = NaiveForecast;
+    let load_forecast = forecaster.forecast(&baseline, steps_per_day);
 
     let mut pv = SolarPv::new(
         5.0,           /* kw_peak */
@@ -48,6 +57,7 @@ fn main() {
         let context = DeviceContext::new(t);
 
         let base_demand_kw = load.power_kw(&context);
+        let forecast_kw = load_forecast[context.timestep];
         let solar_kw = pv.power_kw(&context);
 
         // Simple battery control strategy:
@@ -68,6 +78,7 @@ fn main() {
         let soc = battery.soc * 100.0;
         println!(
             "Time (Hr) {t}: {baseload_device}={base_demand_kw:.2} kW, \
+            Forecast={forecast_kw:.2} kW, \
             {solar_device}={solar_kw:.2} kW, \
             {battery_device}={battery_kw:.2} kW (SoC={soc:.1}%), \
             {feeder_name}={feeder_kw:.2} kW"
