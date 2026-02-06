@@ -2,7 +2,7 @@ mod devices;
 mod forecast;
 mod sim;
 
-use devices::{BaseLoad, Battery, Device, DeviceContext, SolarPv};
+use devices::{BaseLoad, Battery, Device, DeviceContext, EvCharger, SolarPv};
 use forecast::NaiveForecast;
 use sim::clock::Clock;
 use sim::controller::NaiveRtController;
@@ -54,6 +54,17 @@ fn main() {
     );
 
     let battery_device = battery.device_type();
+    let mut ev = EvCharger::new(
+        7.2,           /* max_charge_kw */
+        steps_per_day, /* steps_per_day */
+        4.0,           /* demand_kwh_min */
+        14.0,          /* demand_kwh_max */
+        3,             /* dwell_steps_min */
+        10,            /* dwell_steps_max */
+        99,            /* seed */
+    );
+    let ev_device = ev.device_type();
+
     let mut feeder = Feeder::new("MainFeeder");
     let controller = NaiveRtController;
 
@@ -64,14 +75,16 @@ fn main() {
         let forecast_kw = load_forecast[context.timestep];
         let target_kw = target_schedule[context.timestep];
         let solar_kw = pv.power_kw(&context);
+        let ev_kw = ev.power_kw(&context);
 
-        let net_without_battery = base_demand_kw - solar_kw;
+        let net_without_battery = base_demand_kw + ev_kw - solar_kw;
         let battery_setpoint_kw = controller.battery_setpoint_kw(net_without_battery, target_kw);
         let battery_context = DeviceContext::with_setpoint(context.timestep, battery_setpoint_kw);
 
         let battery_kw = battery.power_kw(&battery_context);
         feeder.reset();
         feeder.add_net_kw(base_demand_kw);
+        feeder.add_net_kw(ev_kw);
         feeder.add_net_kw(-solar_kw);
         feeder.add_net_kw(-battery_kw);
         let feeder_kw = feeder.net_kw();
@@ -84,6 +97,7 @@ fn main() {
             Forecast={forecast_kw:.2} kW, \
             Target={target_kw:.2} kW, \
             {solar_device}={solar_kw:.2} kW, \
+            {ev_device}={ev_kw:.2} kW, \
             {battery_device}={battery_kw:.2} kW (SoC={soc:.1}%), \
             {feeder_name}={feeder_kw:.2} kW, \
             Error={tracking_error_kw:.2} kW"
