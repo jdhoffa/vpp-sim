@@ -3,6 +3,7 @@ mod sim;
 
 use devices::{BaseLoad, Battery, Device, DeviceContext, SolarPv};
 use sim::clock::Clock;
+use sim::feeder::Feeder;
 
 fn main() {
     let steps_per_day = 24; // 1-hr intervals
@@ -41,6 +42,7 @@ fn main() {
     );
 
     let battery_device = battery.device_type();
+    let mut feeder = Feeder::new("MainFeeder");
 
     clock.run(|t| {
         let context = DeviceContext::new(t);
@@ -56,15 +58,19 @@ fn main() {
         let battery_context = DeviceContext::with_setpoint(context.timestep, net_without_battery);
 
         let battery_kw = battery.power_kw(&battery_context);
-        let net_with_battery = net_without_battery - battery_kw;
+        feeder.reset();
+        feeder.add_net_kw(base_demand_kw);
+        feeder.add_net_kw(-solar_kw);
+        feeder.add_net_kw(-battery_kw);
+        let feeder_kw = feeder.net_kw();
+        let feeder_name = feeder.name();
 
         let soc = battery.soc * 100.0;
         println!(
             "Time (Hr) {t}: {baseload_device}={base_demand_kw:.2} kW, \
             {solar_device}={solar_kw:.2} kW, \
             {battery_device}={battery_kw:.2} kW (SoC={soc:.1}%), \
-            Net={net_with_battery:.2} kW"
+            {feeder_name}={feeder_kw:.2} kW"
         );
-        // later: push `kw` into feeder aggregator
     })
 }
