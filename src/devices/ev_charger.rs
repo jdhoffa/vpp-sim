@@ -98,10 +98,9 @@ impl EvCharger {
             remaining_kwh: demand_kwh,
         });
     }
-}
 
-impl Device for EvCharger {
-    fn power_kw(&mut self, context: &DeviceContext) -> f32 {
+    /// Returns the unconstrained charging request at the current timestep.
+    pub fn requested_power_kw(&mut self, context: &DeviceContext) -> f32 {
         let day = context.timestep / self.steps_per_day;
         let day_t = context.timestep % self.steps_per_day;
         let dt_hours = self.dt_hours();
@@ -110,7 +109,7 @@ impl Device for EvCharger {
             self.sample_session_for_day(day);
         }
 
-        let Some(session) = &mut self.session else {
+        let Some(session) = &self.session else {
             return 0.0;
         };
 
@@ -127,8 +126,25 @@ impl Device for EvCharger {
             return 0.0;
         }
 
-        let required_kw = session.remaining_kwh / (remaining_steps as f32 * dt_hours);
-        let charge_kw = required_kw.min(self.max_charge_kw).max(0.0);
+        (session.remaining_kwh / (remaining_steps as f32 * dt_hours)).max(0.0)
+    }
+}
+
+impl Device for EvCharger {
+    fn power_kw(&mut self, context: &DeviceContext) -> f32 {
+        let requested_kw = self.requested_power_kw(context);
+        let dt_hours = self.dt_hours();
+
+        if requested_kw <= 0.0 {
+            return 0.0;
+        }
+
+        let cap_kw = context.setpoint_kw.unwrap_or(self.max_charge_kw).max(0.0);
+        let charge_kw = requested_kw.min(cap_kw).min(self.max_charge_kw).max(0.0);
+
+        let Some(session) = &mut self.session else {
+            return 0.0;
+        };
 
         let delivered_kwh = charge_kw * dt_hours;
         session.remaining_kwh = (session.remaining_kwh - delivered_kwh).max(0.0);

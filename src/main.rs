@@ -65,7 +65,11 @@ fn main() {
     );
     let ev_device = ev.device_type();
 
-    let mut feeder = Feeder::new("MainFeeder");
+    let mut feeder = Feeder::with_limits(
+        "MainFeeder",
+        5.0, /* max_import_kw */
+        4.0, /* max_export_kw */
+    );
     let controller = NaiveRtController;
 
     clock.run(|t| {
@@ -75,10 +79,26 @@ fn main() {
         let forecast_kw = load_forecast[context.timestep];
         let target_kw = target_schedule[context.timestep];
         let solar_kw = pv.power_kw(&context);
-        let ev_kw = ev.power_kw(&context);
+        let net_fixed_kw = base_demand_kw - solar_kw;
+        let ev_requested_kw = ev.requested_power_kw(&context);
+        let ev_capped_kw = controller.capped_flexible_load_kw(
+            net_fixed_kw,
+            ev_requested_kw,
+            feeder.max_import_kw(),
+            battery.max_discharge_kw,
+        );
+        let ev_context = DeviceContext::with_setpoint(context.timestep, ev_capped_kw);
+        let ev_kw = ev.power_kw(&ev_context);
 
-        let net_without_battery = base_demand_kw + ev_kw - solar_kw;
-        let battery_setpoint_kw = controller.battery_setpoint_kw(net_without_battery, target_kw);
+        let net_without_battery = net_fixed_kw + ev_kw;
+        let battery_setpoint_kw = controller.constrained_battery_setpoint_kw(
+            net_without_battery,
+            target_kw,
+            feeder.max_import_kw(),
+            feeder.max_export_kw(),
+            battery.max_charge_kw,
+            battery.max_discharge_kw,
+        );
         let battery_context = DeviceContext::with_setpoint(context.timestep, battery_setpoint_kw);
 
         let battery_kw = battery.power_kw(&battery_context);
@@ -97,10 +117,12 @@ fn main() {
             Forecast={forecast_kw:.2} kW, \
             Target={target_kw:.2} kW, \
             {solar_device}={solar_kw:.2} kW, \
-            {ev_device}={ev_kw:.2} kW, \
+            {ev_device}={ev_kw:.2} kW (Req={ev_requested_kw:.2}, Cap={ev_capped_kw:.2}), \
             {battery_device}={battery_kw:.2} kW (SoC={soc:.1}%), \
             {feeder_name}={feeder_kw:.2} kW, \
-            Error={tracking_error_kw:.2} kW"
+            Error={tracking_error_kw:.2} kW, \
+            LimitOK={}",
+            feeder.within_limits()
         );
     })
 }
