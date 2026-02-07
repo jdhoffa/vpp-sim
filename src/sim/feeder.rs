@@ -12,6 +12,7 @@ pub struct Feeder {
 }
 
 impl Feeder {
+    #[cfg(test)]
     pub fn new(name: &'static str) -> Self {
         Self {
             name,

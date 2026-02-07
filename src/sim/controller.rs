@@ -9,6 +9,7 @@ impl NaiveRtController {
     ///
     /// Feeder model: `feeder_kw = net_without_battery - battery_kw`
     /// Therefore: `battery_kw = net_without_battery - target_kw`
+    #[cfg(test)]
     pub fn battery_setpoint_kw(&self, net_without_battery: f32, target_kw: f32) -> f32 {
         net_without_battery - target_kw
     }
