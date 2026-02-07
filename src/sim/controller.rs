@@ -9,6 +9,7 @@ impl NaiveRtController {
     ///
     /// Feeder model: `feeder_kw = net_without_battery - battery_kw`
     /// Therefore: `battery_kw = net_without_battery - target_kw`
+    #[cfg(test)]
     pub fn battery_setpoint_kw(&self, net_without_battery: f32, target_kw: f32) -> f32 {
         net_without_battery - target_kw
     }
@@ -55,6 +56,30 @@ impl NaiveRtController {
             // battery-limited command closest to desired.
             desired_kw.clamp(-battery_max_charge_kw, battery_max_discharge_kw)
         }
+    }
+
+    /// Apply demand response by shedding flexible load first, then curtailable baseload.
+    ///
+    /// Returns `(baseload_after_kw, flexible_after_kw, achieved_reduction_kw)`.
+    pub fn apply_demand_response_kw(
+        &self,
+        baseload_kw: f32,
+        flexible_load_kw: f32,
+        requested_reduction_kw: f32,
+    ) -> (f32, f32, f32) {
+        let mut remaining_reduction = requested_reduction_kw.max(0.0);
+
+        let flexible = flexible_load_kw.max(0.0);
+        let flex_shed = flexible.min(remaining_reduction);
+        let flexible_after = flexible - flex_shed;
+        remaining_reduction -= flex_shed;
+
+        let base = baseload_kw.max(0.0);
+        let base_shed = base.min(remaining_reduction);
+        let baseload_after = base - base_shed;
+
+        let achieved = flex_shed + base_shed;
+        (baseload_after, flexible_after, achieved)
     }
 }
 
@@ -113,5 +138,23 @@ mod tests {
         let battery_kw = controller.constrained_battery_setpoint_kw(-6.0, -5.0, 5.0, 2.0, 4.0, 3.0);
         let feeder_kw = -6.0 - battery_kw;
         assert!(feeder_kw >= -2.0 - 1e-6);
+    }
+
+    #[test]
+    fn demand_response_sheds_flexible_then_baseload() {
+        let controller = NaiveRtController;
+        let (base_after, flex_after, achieved) = controller.apply_demand_response_kw(3.0, 2.0, 4.0);
+        assert_eq!(flex_after, 0.0);
+        assert_eq!(base_after, 1.0);
+        assert_eq!(achieved, 4.0);
+    }
+
+    #[test]
+    fn demand_response_limited_by_available_load() {
+        let controller = NaiveRtController;
+        let (base_after, flex_after, achieved) = controller.apply_demand_response_kw(1.0, 0.5, 3.0);
+        assert_eq!(flex_after, 0.0);
+        assert_eq!(base_after, 0.0);
+        assert_eq!(achieved, 1.5);
     }
 }
