@@ -6,6 +6,7 @@ use devices::{BaseLoad, Battery, Device, DeviceContext, EvCharger, SolarPv};
 use forecast::NaiveForecast;
 use sim::clock::Clock;
 use sim::controller::NaiveRtController;
+use sim::event::DemandResponseEvent;
 use sim::feeder::Feeder;
 use sim::schedule::DayAheadSchedule;
 
@@ -70,20 +71,32 @@ fn main() {
         5.0, /* max_import_kw */
         4.0, /* max_export_kw */
     );
+
+    // Example external DR event: request 1.5kW reduction from hour 17 to 21.
+    let dr_event = DemandResponseEvent::new(17, 21, 1.5);
+
     let controller = NaiveRtController;
 
     clock.run(|t| {
         let context = DeviceContext::new(t);
 
-        let base_demand_kw = load.power_kw(&context);
+        let base_demand_kw_raw = load.power_kw(&context);
         let forecast_kw = load_forecast[context.timestep];
         let target_kw = target_schedule[context.timestep];
         let solar_kw = pv.power_kw(&context);
-        let net_fixed_kw = base_demand_kw - solar_kw;
         let ev_requested_kw = ev.requested_power_kw(&context);
+
+        let dr_requested_kw = dr_event.requested_reduction_at_kw(t);
+        let (base_demand_kw, ev_after_dr_kw, dr_achieved_kw) = controller.apply_demand_response_kw(
+            base_demand_kw_raw,
+            ev_requested_kw,
+            dr_requested_kw,
+        );
+
+        let net_fixed_kw = base_demand_kw - solar_kw;
         let ev_capped_kw = controller.capped_flexible_load_kw(
             net_fixed_kw,
-            ev_requested_kw,
+            ev_after_dr_kw,
             feeder.max_import_kw(),
             battery.max_discharge_kw,
         );
@@ -114,13 +127,15 @@ fn main() {
         let soc = battery.soc * 100.0;
         println!(
             "Time (Hr) {t}: {baseload_device}={base_demand_kw:.2} kW, \
+            RawBase={base_demand_kw_raw:.2} kW, \
             Forecast={forecast_kw:.2} kW, \
             Target={target_kw:.2} kW, \
             {solar_device}={solar_kw:.2} kW, \
-            {ev_device}={ev_kw:.2} kW (Req={ev_requested_kw:.2}, Cap={ev_capped_kw:.2}), \
+            {ev_device}={ev_kw:.2} kW (Req={ev_requested_kw:.2}, DR={ev_after_dr_kw:.2}, Cap={ev_capped_kw:.2}), \
             {battery_device}={battery_kw:.2} kW (SoC={soc:.1}%), \
             {feeder_name}={feeder_kw:.2} kW, \
             Error={tracking_error_kw:.2} kW, \
+            DR(req={dr_requested_kw:.2}, done={dr_achieved_kw:.2}), \
             LimitOK={}",
             feeder.within_limits()
         );
