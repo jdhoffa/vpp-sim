@@ -10,8 +10,11 @@ The simulator models a local distribution feeder with a mix of flexible and infl
 - 🚗 EV charging stations
 - 💡 Flexible and baseline household demand
 - 🧠 A coordinating aggregator (the "VPP")
+- 🚨 Demand response events for temporary load reduction
+- 📏 Feeder import/export capacity constraints
+- 📊 End-of-run KPI reporting
 
-The simulation advances in fast-forwarded, discrete time steps (e.g. 5-minute intervals), allowing users to explore different configurations and control strategies in real time through a terminal-based user interface (TUI).
+The simulation advances in fast-forwarded, discrete time steps (e.g. 5-minute intervals), allowing users to explore different configurations and control strategies through terminal output.
 
 
 ## Project Status
@@ -27,25 +30,43 @@ Stay tuned!
 
 ### 🧩 Running the demo simulation
 
-Running the default binary will trigger a demonstrative 24-step (1-hr interval) simulation with a simple baseload, solar and battery model:
+Running the default binary triggers a demonstrative 24-step (1-hr interval) simulation with:
+
+- Baseline load + solar generation
+- Flexible EV charging demand
+- Battery tracking control
+- Feeder import/export limits
+- A demand response event window
+- Post-run KPI summary
 
 ```bash
 cargo run --release
 ```
 
-#### Expected outputs:
+#### Example output:
 ```
-Time (Hr) 0: BaseLoad=1.35 kW, SolarPV=0.00 kW, Battery=1.35 kW (SoC=35.8%), Net=0.00 kW
-Time (Hr) 1: BaseLoad=1.42 kW, SolarPV=0.00 kW, Battery=1.42 kW (SoC=20.9%), Net=0.00 kW
+Time (Hr) 0: BaseLoad=1.35 kW, RawBase=1.35 kW, Forecast=0.79 kW, Target=0.79 kW,
+SolarPV=0.00 kW, EvCharger=0.00 kW (Req=0.00, DR=0.00, Cap=0.00),
+Battery=0.56 kW (SoC=44.1%), MainFeeder=0.79 kW, Error=0.00 kW,
+DR(req=0.00, done=0.00), LimitOK=true
 ...
-# high solar generation, battery charging
-Time (Hr) 10: BaseLoad=0.39 kW, SolarPV=3.73 kW, Battery=-3.34 kW (SoC=53.6%), Net=0.00 kW
-Time (Hr) 11: BaseLoad=0.18 kW, SolarPV=4.72 kW, Battery=-4.54 kW (SoC=96.7%), Net=0.00 kW
+# demand response event active; EV/baseload may be curtailed
+Time (Hr) 18: BaseLoad=0.40 kW, RawBase=1.20 kW, Forecast=0.96 kW, Target=0.79 kW,
+SolarPV=0.00 kW, EvCharger=0.70 kW (Req=1.20, DR=0.70, Cap=0.70),
+Battery=0.31 kW (SoC=40.2%), MainFeeder=0.79 kW, Error=0.00 kW,
+DR(req=1.50, done=1.30), LimitOK=true
 ...
-# no solar generation, battery discharging
-Time (Hr) 20: BaseLoad=0.95 kW, SolarPV=0.00 kW, Battery=0.95 kW (SoC=76.3%), Net=0.00 kW
-Time (Hr) 21: BaseLoad=1.02 kW, SolarPV=0.00 kW, Battery=1.02 kW (SoC=65.5%), Net=0.00 kW
+
+--- KPI Report ---
+RMSE tracking error: 0.084 kW
+Curtailment achieved: 92.5%
+Feeder peak load: 3.91 kW
 ```
+
+Notes:
+
+- Example values are illustrative; exact numbers depend on random seeds and configuration.
+- `LimitOK=true` indicates the feeder stayed within configured import/export limits at that timestep.
 
 ## Documentation
 The documentation for this project can be opened locally using:
