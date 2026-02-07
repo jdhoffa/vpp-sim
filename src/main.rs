@@ -77,6 +77,12 @@ fn main() {
 
     let controller = NaiveRtController;
 
+    let mut tracking_error_sq_sum = 0.0_f32;
+    let mut tracking_error_count = 0_usize;
+    let mut requested_curtailment_sum_kw = 0.0_f32;
+    let mut achieved_curtailment_sum_kw = 0.0_f32;
+    let mut feeder_peak_load_kw = 0.0_f32;
+
     clock.run(|t| {
         let context = DeviceContext::new(t);
 
@@ -124,6 +130,12 @@ fn main() {
         let tracking_error_kw = feeder_kw - target_kw;
         let feeder_name = feeder.name();
 
+        tracking_error_sq_sum += tracking_error_kw * tracking_error_kw;
+        tracking_error_count += 1;
+        requested_curtailment_sum_kw += dr_requested_kw;
+        achieved_curtailment_sum_kw += dr_achieved_kw;
+        feeder_peak_load_kw = feeder_peak_load_kw.max(feeder_kw);
+
         let soc = battery.soc * 100.0;
         println!(
             "Time (Hr) {t}: {baseload_device}={base_demand_kw:.2} kW, \
@@ -139,5 +151,22 @@ fn main() {
             LimitOK={}",
             feeder.within_limits()
         );
-    })
+    });
+
+    let rmse_tracking_kw = if tracking_error_count > 0 {
+        (tracking_error_sq_sum / tracking_error_count as f32).sqrt()
+    } else {
+        0.0
+    };
+
+    let curtailment_pct = if requested_curtailment_sum_kw > 0.0 {
+        100.0 * achieved_curtailment_sum_kw / requested_curtailment_sum_kw
+    } else {
+        0.0
+    };
+
+    println!("\n--- KPI Report ---");
+    println!("RMSE tracking error: {rmse_tracking_kw:.3} kW");
+    println!("Curtailment achieved: {curtailment_pct:.1}%");
+    println!("Feeder peak load: {feeder_peak_load_kw:.2} kW");
 }
