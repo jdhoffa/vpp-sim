@@ -185,3 +185,34 @@ fn feeder_constraints_no_violations_in_relaxed_scenario() {
         "no violations expected with generous feeder limits"
     );
 }
+
+#[test]
+fn imbalance_cost_is_finite_and_nonnegative() {
+    let mut engine = build_default_engine();
+    let results = engine.run();
+
+    // Every per-step cost should be finite and >= 0
+    for r in &results {
+        assert!(
+            r.imbalance_cost.is_finite() && r.imbalance_cost >= 0.0,
+            "imbalance_cost must be finite and >= 0 at t={}, got {}",
+            r.timestep,
+            r.imbalance_cost
+        );
+    }
+
+    // Aggregate KPI should match sum of per-step costs
+    let kpi = KpiReport::from_results(
+        &results,
+        engine.config().dt_hours,
+        engine.battery().capacity_kwh,
+    );
+    let manual_sum: f32 = results.iter().map(|r| r.imbalance_cost).sum();
+    assert!(
+        (kpi.total_imbalance_cost - manual_sum).abs() < 1e-4,
+        "KPI total_imbalance_cost ({}) should match sum of per-step costs ({})",
+        kpi.total_imbalance_cost,
+        manual_sum
+    );
+    assert!(kpi.total_imbalance_cost.is_finite());
+}

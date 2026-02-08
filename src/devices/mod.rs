@@ -8,6 +8,8 @@ pub mod battery;
 pub mod ev_charger;
 /// Solar photovoltaic generation model.
 pub mod solar;
+/// Solar PV with AR(1) cloud variability model.
+pub mod solar_ar1;
 pub mod types;
 
 // Re-export the main types for convenience
@@ -15,5 +17,6 @@ pub use baseload::BaseLoad;
 pub use battery::Battery;
 pub use ev_charger::EvCharger;
 pub use solar::SolarPv;
+pub use solar_ar1::SolarPvAr1;
 pub use types::Device;
 pub use types::DeviceContext;

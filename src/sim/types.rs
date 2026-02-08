@@ -26,6 +26,8 @@ pub struct SimConfig {
     pub dt_hours: f32,
     /// Master random seed for reproducibility.
     pub seed: u64,
+    /// Imbalance settlement price per kWh (currency units / kWh).
+    pub imbalance_price_per_kwh: f32,
 }
 
 impl SimConfig {
@@ -48,6 +50,7 @@ impl SimConfig {
             days,
             dt_hours: 24.0 / steps_per_day as f32,
             seed,
+            imbalance_price_per_kwh: 0.10,
         }
     }
 
@@ -145,6 +148,8 @@ pub struct StepResult {
     pub dr_achieved_kw: f32,
     /// Whether feeder net load is within import/export limits.
     pub within_feeder_limits: bool,
+    /// Imbalance cost for this timestep: `price * |tracking_error| * dt`.
+    pub imbalance_cost: f32,
 }
 
 impl fmt::Display for StepResult {
@@ -152,13 +157,14 @@ impl fmt::Display for StepResult {
         write!(
             f,
             "t={:>3} ({:>5.1}h) | feeder={:>6.2} kW  target={:>6.2} kW  \
-             err={:>6.2} kW | base={:.2}  solar={:.2}  ev={:.2}  bat={:.2} \
+             err={:>6.2} kW  cost={:.4} | base={:.2}  solar={:.2}  ev={:.2}  bat={:.2} \
              (SoC={:.1}%) | DR(req={:.2}, done={:.2}) ok={}",
             self.timestep,
             self.time_hr,
             self.feeder_kw,
             self.target_kw,
             self.tracking_error_kw,
+            self.imbalance_cost,
             self.base_kw_after_dr,
             self.solar_kw,
             self.ev_actual_kw,
@@ -225,6 +231,7 @@ mod tests {
             dr_requested_kw: 0.5,
             dr_achieved_kw: 0.5,
             within_feeder_limits: true,
+            imbalance_cost: 0.01,
         };
         let s = format!("{r}");
         assert!(!s.is_empty());

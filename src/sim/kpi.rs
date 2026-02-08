@@ -26,6 +26,8 @@ pub struct KpiReport {
     pub battery_equivalent_full_cycles: f32,
     /// Number of timesteps where feeder limits were violated.
     pub feeder_violation_count: usize,
+    /// Total imbalance settlement cost (sum of per-step costs).
+    pub total_imbalance_cost: f32,
 }
 
 impl KpiReport {
@@ -51,6 +53,7 @@ impl KpiReport {
                 battery_throughput_kwh: 0.0,
                 battery_equivalent_full_cycles: 0.0,
                 feeder_violation_count: 0,
+                total_imbalance_cost: 0.0,
             };
         }
 
@@ -63,6 +66,7 @@ impl KpiReport {
         let mut peak_export = 0.0_f32;
         let mut bat_throughput = 0.0_f32;
         let mut violations = 0_usize;
+        let mut imbalance_cost_sum = 0.0_f32;
 
         for r in results {
             let err = r.tracking_error_kw;
@@ -80,6 +84,8 @@ impl KpiReport {
             if !r.within_feeder_limits {
                 violations += 1;
             }
+
+            imbalance_cost_sum += r.imbalance_cost;
         }
 
         let curtailment_pct = if dr_requested_sum > 0.0 {
@@ -103,6 +109,7 @@ impl KpiReport {
             battery_throughput_kwh: bat_throughput,
             battery_equivalent_full_cycles: cycles,
             feeder_violation_count: violations,
+            total_imbalance_cost: imbalance_cost_sum,
         }
     }
 }
@@ -120,7 +127,8 @@ impl fmt::Display for KpiReport {
             "Battery throughput:    {:.2} kWh ({:.2} equiv. cycles)",
             self.battery_throughput_kwh, self.battery_equivalent_full_cycles
         )?;
-        write!(f, "Feeder violations:     {}", self.feeder_violation_count)
+        writeln!(f, "Feeder violations:     {}", self.feeder_violation_count)?;
+        write!(f, "Imbalance cost:        {:.4}", self.total_imbalance_cost)
     }
 }
 
@@ -129,6 +137,15 @@ mod tests {
     use super::*;
 
     fn make_result(tracking_error_kw: f32, battery_actual_kw: f32, feeder_kw: f32) -> StepResult {
+        make_result_with_cost(tracking_error_kw, battery_actual_kw, feeder_kw, 0.0)
+    }
+
+    fn make_result_with_cost(
+        tracking_error_kw: f32,
+        battery_actual_kw: f32,
+        feeder_kw: f32,
+        imbalance_cost: f32,
+    ) -> StepResult {
         StepResult {
             timestep: 0,
             time_hr: 0.0,
@@ -148,6 +165,7 @@ mod tests {
             dr_requested_kw: 0.0,
             dr_achieved_kw: 0.0,
             within_feeder_limits: true,
+            imbalance_cost,
         }
     }
 
@@ -200,5 +218,26 @@ mod tests {
         let kpi = KpiReport::from_results(&[], 1.0, 10.0);
         assert_eq!(kpi.rmse_tracking_kw, 0.0);
         assert_eq!(kpi.feeder_violation_count, 0);
+        assert_eq!(kpi.total_imbalance_cost, 0.0);
+    }
+
+    #[test]
+    fn imbalance_cost_single_step() {
+        // price=0.10, |error|=2.0 kW, dt=1.0 h → cost = 0.10 * 2.0 * 1.0 = 0.20
+        let r = make_result_with_cost(2.0, 0.0, 2.0, 0.20);
+        let kpi = KpiReport::from_results(&[r], 1.0, 10.0);
+        assert!((kpi.total_imbalance_cost - 0.20).abs() < 1e-6);
+    }
+
+    #[test]
+    fn imbalance_cost_aggregation() {
+        // Three steps with costs 0.10, 0.25, 0.05 → total 0.40
+        let results = vec![
+            make_result_with_cost(1.0, 0.0, 1.0, 0.10),
+            make_result_with_cost(-2.5, 0.0, -2.5, 0.25),
+            make_result_with_cost(0.5, 0.0, 0.5, 0.05),
+        ];
+        let kpi = KpiReport::from_results(&results, 1.0, 10.0);
+        assert!((kpi.total_imbalance_cost - 0.40).abs() < 1e-6);
     }
 }

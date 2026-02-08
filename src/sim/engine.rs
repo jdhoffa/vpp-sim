@@ -134,6 +134,8 @@ impl<C: Controller> Engine<C> {
 
         // 7. Build result
         let tracking_error_kw = feeder_kw - target_kw;
+        let imbalance_cost =
+            self.config.imbalance_price_per_kwh * tracking_error_kw.abs() * self.config.dt_hours;
 
         StepResult {
             timestep: t,
@@ -154,6 +156,7 @@ impl<C: Controller> Engine<C> {
             dr_requested_kw,
             dr_achieved_kw: dispatch.dr_achieved_kw,
             within_feeder_limits,
+            imbalance_cost,
         }
     }
 
