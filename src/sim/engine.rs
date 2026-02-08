@@ -1,6 +1,6 @@
 //! Simulation engine that orchestrates devices, controller, and power balance.
 
-use crate::devices::{BaseLoad, Battery, Device, DeviceContext, EvCharger, SolarPv};
+use crate::devices::{BaseLoad, Battery, Device, DeviceContext, EvCharger, Solar};
 
 use super::controller::Controller;
 use super::event::DemandResponseEvent;
@@ -15,7 +15,7 @@ use super::types::{SimConfig, StepInput, StepResult, StepState};
 pub struct Engine<C: Controller> {
     config: SimConfig,
     load: BaseLoad,
-    pv: SolarPv,
+    pv: Solar,
     battery: Battery,
     ev: EvCharger,
     feeder: Feeder,
@@ -32,7 +32,7 @@ impl<C: Controller> Engine<C> {
     ///
     /// * `config` - Simulation configuration
     /// * `load` - Baseload device
-    /// * `pv` - Solar PV device
+    /// * `pv` - Solar PV device (v1 or v2)
     /// * `battery` - Battery storage device
     /// * `ev` - EV charger device
     /// * `feeder` - Feeder with import/export limits
@@ -44,7 +44,7 @@ impl<C: Controller> Engine<C> {
     pub fn new(
         config: SimConfig,
         load: BaseLoad,
-        pv: SolarPv,
+        pv: Solar,
         battery: Battery,
         ev: EvCharger,
         feeder: Feeder,

@@ -1,0 +1,46 @@
+# DR-stress scenario: aggressive demand response events, tight feeder limits
+
+[simulation]
+steps_per_day = 24
+days = 1
+seed = 42
+imbalance_price_per_kwh = 0.25
+
+[baseload]
+base_kw = 1.2
+amp_kw = 0.8
+phase_rad = 1.2
+noise_std = 0.05
+
+[solar]
+model = "simple"
+kw_peak = 4.0
+sunrise_idx = 6
+sunset_idx = 18
+noise_std = 0.05
+alpha = 0.9
+cloud_noise_std = 0.2
+
+[battery]
+capacity_kwh = 8.0
+initial_soc = 0.5
+max_charge_kw = 4.0
+max_discharge_kw = 4.0
+eta_charge = 0.90
+eta_discharge = 0.90
+
+[ev]
+max_charge_kw = 7.2
+demand_kwh_min = 6.0
+demand_kwh_max = 18.0
+dwell_steps_min = 2
+dwell_steps_max = 8
+
+[feeder]
+max_import_kw = 3.0
+max_export_kw = 2.0
+
+[dr_event]
+start_step = 14
+end_step = 22
+requested_reduction_kw = 3.0

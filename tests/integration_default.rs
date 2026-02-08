@@ -2,7 +2,7 @@
 
 mod common;
 
-use vpp_sim::devices::{Battery, Device, DeviceContext};
+use vpp_sim::devices::{Battery, Device, DeviceContext, Solar};
 use vpp_sim::sim::controller::NaiveRtController;
 use vpp_sim::sim::engine::Engine;
 use vpp_sim::sim::feeder::Feeder;
@@ -13,7 +13,7 @@ use vpp_sim::sim::types::SimConfig;
 fn build_default_engine() -> Engine<NaiveRtController> {
     let config = common::default_config();
     let (baseline, load) = common::default_baseline_and_load(&config);
-    let pv = common::default_solar_pv(&config);
+    let pv = Solar::Simple(common::default_solar_pv(&config));
     let battery = common::default_battery(&config);
     let ev = common::default_ev(&config);
     let feeder = common::default_feeder();
@@ -153,7 +153,7 @@ fn energy_conservation_feeder_balance_invariant() {
 fn feeder_constraints_no_violations_in_relaxed_scenario() {
     let config = common::default_config();
     let (baseline, load) = common::default_baseline_and_load(&config);
-    let pv = common::default_solar_pv(&config);
+    let pv = Solar::Simple(common::default_solar_pv(&config));
     let battery = common::default_battery(&config);
     let ev = common::default_ev(&config);
     let feeder = Feeder::with_limits("Relaxed", 50.0, 50.0);

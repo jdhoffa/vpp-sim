@@ -1,0 +1,46 @@
+# High-solar scenario: large PV array, export-heavy, stochastic cloud model
+
+[simulation]
+steps_per_day = 24
+days = 1
+seed = 42
+imbalance_price_per_kwh = 0.10
+
+[baseload]
+base_kw = 0.6
+amp_kw = 0.4
+phase_rad = 1.2
+noise_std = 0.03
+
+[solar]
+model = "ar1"
+kw_peak = 12.0
+sunrise_idx = 5
+sunset_idx = 19
+noise_std = 0.05
+alpha = 0.9
+cloud_noise_std = 0.25
+
+[battery]
+capacity_kwh = 15.0
+initial_soc = 0.3
+max_charge_kw = 7.0
+max_discharge_kw = 7.0
+eta_charge = 0.95
+eta_discharge = 0.95
+
+[ev]
+max_charge_kw = 7.2
+demand_kwh_min = 4.0
+demand_kwh_max = 14.0
+dwell_steps_min = 3
+dwell_steps_max = 10
+
+[feeder]
+max_import_kw = 5.0
+max_export_kw = 10.0
+
+[dr_event]
+start_step = 17
+end_step = 21
+requested_reduction_kw = 1.0
