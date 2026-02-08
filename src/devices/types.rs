@@ -1,5 +1,7 @@
 //! Common types and traits for device simulation components.
 
+use std::f32::consts::PI;
+
 use rand::{Rng, rngs::StdRng};
 
 /// Contextual information passed to devices during power calculations.
@@ -8,12 +10,14 @@ use rand::{Rng, rngs::StdRng};
 /// * `timestep` - Current simulation timestep
 /// * `setpoint_kw` - Optional power setpoint for controllable devices (kW)
 pub struct DeviceContext {
+    /// Current simulation timestep index.
     pub timestep: usize,
+    /// Optional power setpoint for controllable devices (kW).
     pub setpoint_kw: Option<f32>,
 }
 
 impl DeviceContext {
-    /// Creates a new DeviceContext with the given timestep and no setpoint.
+    /// Creates a new `DeviceContext` with the given timestep and no setpoint.
     pub fn new(timestep: usize) -> Self {
         Self {
             timestep,
@@ -21,7 +25,7 @@ impl DeviceContext {
         }
     }
 
-    /// Creates a new DeviceContext with the given timestep and setpoint.
+    /// Creates a new `DeviceContext` with the given timestep and setpoint.
     pub fn with_setpoint(timestep: usize, setpoint_kw: f32) -> Self {
         Self {
             timestep,
@@ -55,6 +59,31 @@ pub trait Device {
     fn device_type(&self) -> &'static str;
 }
 
+/// Calculates the daylight fraction for a specific time step.
+///
+/// Returns a value between 0.0 and 1.0 representing the relative
+/// solar intensity, following a half-cosine shape from sunrise to sunset.
+///
+/// # Arguments
+///
+/// * `t` - Current timestep index
+/// * `steps_per_day` - Number of timesteps per simulated day
+/// * `sunrise_idx` - Time step index when sunrise occurs (inclusive)
+/// * `sunset_idx` - Time step index when sunset occurs (exclusive)
+///
+/// # Returns
+///
+/// Solar intensity fraction (0.0 at night, up to ~1.0 at solar noon)
+pub fn daylight_frac(t: usize, steps_per_day: usize, sunrise_idx: usize, sunset_idx: usize) -> f32 {
+    let day_t = t % steps_per_day;
+    if day_t < sunrise_idx || day_t >= sunset_idx {
+        return 0.0;
+    }
+    let span = (sunset_idx - sunrise_idx) as f32;
+    let x = (day_t - sunrise_idx) as f32 / span;
+    0.5 * (1.0 - (2.0 * PI * x).cos())
+}
+
 /// Utility function to generate Gaussian noise using Box-Muller transform.
 ///
 /// # Arguments
@@ -72,6 +101,6 @@ pub fn gaussian_noise(rng: &mut StdRng, std_dev: f32) -> f32 {
 
     let u1: f32 = rng.random::<f32>().clamp(1e-6, 1.0);
     let u2: f32 = rng.random::<f32>();
-    let z0 = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f32::consts::PI * u2).cos();
+    let z0 = (-2.0 * u1.ln()).sqrt() * (2.0 * PI * u2).cos();
     z0 * std_dev
 }

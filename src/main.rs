@@ -1,172 +1,66 @@
-mod devices;
-mod forecast;
-mod sim;
+//! VPP simulator entry point — wiring only.
 
-use devices::{BaseLoad, Battery, Device, DeviceContext, EvCharger, SolarPv};
-use forecast::NaiveForecast;
-use sim::clock::Clock;
-use sim::controller::NaiveRtController;
-use sim::event::DemandResponseEvent;
-use sim::feeder::Feeder;
-use sim::schedule::DayAheadSchedule;
+use vpp_sim::devices::{BaseLoad, Battery, Device, DeviceContext, EvCharger, SolarPv};
+use vpp_sim::forecast::NaiveForecast;
+use vpp_sim::sim::controller::NaiveRtController;
+use vpp_sim::sim::engine::Engine;
+use vpp_sim::sim::event::DemandResponseEvent;
+use vpp_sim::sim::feeder::Feeder;
+use vpp_sim::sim::kpi::KpiReport;
+use vpp_sim::sim::schedule::DayAheadSchedule;
+use vpp_sim::sim::types::SimConfig;
 
 fn main() {
-    let steps_per_day = 24; // 1-hr intervals
-    let mut clock = Clock::new(steps_per_day); // Simulate 1 day
+    let config = SimConfig::new(24, 1, 42);
 
-    let mut load = BaseLoad::new(
-        0.8,           /* base_kw */
-        0.7,           /* amp_kw */
-        1.2,           /* phase_rad */
-        0.05,          /* noise_std */
-        steps_per_day, /* steps_per_day */
-        42,            /* seed */
-    );
-
-    let baseload_device = load.device_type();
-    let mut baseline_load = load.clone();
-    let mut baseline = Vec::with_capacity(steps_per_day);
-    for t in 0..steps_per_day {
+    // Build devices
+    let mut baseline_load = BaseLoad::new(0.8, 0.7, 1.2, 0.05, &config, 42);
+    let mut baseline = Vec::with_capacity(config.steps_per_day);
+    for t in 0..config.steps_per_day {
         baseline.push(baseline_load.power_kw(&DeviceContext::new(t)));
     }
+
+    let load = BaseLoad::new(0.8, 0.7, 1.2, 0.05, &config, 42);
+    let pv = SolarPv::new(5.0, 6, 18, 0.05, &config, 42);
+    let battery = Battery::new(10.0, 0.5, 5.0, 5.0, 0.95, 0.95, &config);
+    let ev = EvCharger::new(7.2, 4.0, 14.0, 3, 10, &config, 99);
+    let feeder = Feeder::with_limits("MainFeeder", 5.0, 4.0);
+
+    // Forecast and schedule
     let forecaster = NaiveForecast;
-    let load_forecast = forecaster.forecast(&baseline, steps_per_day);
+    let load_forecast = forecaster.forecast(&baseline, config.steps_per_day);
     let target_schedule = DayAheadSchedule::flat_target(&load_forecast);
 
-    let mut pv = SolarPv::new(
-        5.0,           /* kw_peak */
-        steps_per_day, /* steps_per_day */
-        6,             /* sunrise_idx (6 AM) */
-        18,            /* sunset_idx (6 PM) */
-        0.05,          /* noise_std */
-        42,            /* seed */
-    );
-
-    let solar_device = pv.device_type();
-
-    let mut battery = Battery::new(
-        10.0,          /* capacity_kwh */
-        0.5,           /* initial_soc */
-        5.0,           /* max_charge_kw */
-        5.0,           /* max_discharge_kw */
-        0.95,          /* eta_c */
-        0.95,          /* eta_d */
-        steps_per_day, /* steps_per_day */
-    );
-
-    let battery_device = battery.device_type();
-    let mut ev = EvCharger::new(
-        7.2,           /* max_charge_kw */
-        steps_per_day, /* steps_per_day */
-        4.0,           /* demand_kwh_min */
-        14.0,          /* demand_kwh_max */
-        3,             /* dwell_steps_min */
-        10,            /* dwell_steps_max */
-        99,            /* seed */
-    );
-    let ev_device = ev.device_type();
-
-    let mut feeder = Feeder::with_limits(
-        "MainFeeder",
-        5.0, /* max_import_kw */
-        4.0, /* max_export_kw */
-    );
-
-    // Example external DR event: request 1.5kW reduction from hour 17 to 21.
+    // DR event and controller
     let dr_event = DemandResponseEvent::new(17, 21, 1.5);
-
     let controller = NaiveRtController;
 
-    let mut tracking_error_sq_sum = 0.0_f32;
-    let mut tracking_error_count = 0_usize;
-    let mut requested_curtailment_sum_kw = 0.0_f32;
-    let mut achieved_curtailment_sum_kw = 0.0_f32;
-    let mut feeder_peak_load_kw = 0.0_f32;
+    // Build and run engine
+    let mut engine = Engine::new(
+        config,
+        load,
+        pv,
+        battery,
+        ev,
+        feeder,
+        controller,
+        load_forecast,
+        target_schedule,
+        dr_event,
+    );
 
-    clock.run(|t| {
-        let context = DeviceContext::new(t);
+    let results = engine.run();
 
-        let base_demand_kw_raw = load.power_kw(&context);
-        let forecast_kw = load_forecast[context.timestep];
-        let target_kw = target_schedule[context.timestep];
-        let solar_kw = pv.power_kw(&context);
-        let ev_requested_kw = ev.requested_power_kw(&context);
+    // Print per-step results
+    for r in &results {
+        println!("{r}");
+    }
 
-        let dr_requested_kw = dr_event.requested_reduction_at_kw(t);
-        let (base_demand_kw, ev_after_dr_kw, dr_achieved_kw) = controller.apply_demand_response_kw(
-            base_demand_kw_raw,
-            ev_requested_kw,
-            dr_requested_kw,
-        );
-
-        let net_fixed_kw = base_demand_kw - solar_kw;
-        let ev_capped_kw = controller.capped_flexible_load_kw(
-            net_fixed_kw,
-            ev_after_dr_kw,
-            feeder.max_import_kw(),
-            battery.max_discharge_kw,
-        );
-        let ev_context = DeviceContext::with_setpoint(context.timestep, ev_capped_kw);
-        let ev_kw = ev.power_kw(&ev_context);
-
-        let net_without_battery = net_fixed_kw + ev_kw;
-        let battery_setpoint_kw = controller.constrained_battery_setpoint_kw(
-            net_without_battery,
-            target_kw,
-            feeder.max_import_kw(),
-            feeder.max_export_kw(),
-            battery.max_charge_kw,
-            battery.max_discharge_kw,
-        );
-        let battery_context = DeviceContext::with_setpoint(context.timestep, battery_setpoint_kw);
-
-        let battery_kw = battery.power_kw(&battery_context);
-        feeder.reset();
-        feeder.add_net_kw(base_demand_kw);
-        feeder.add_net_kw(ev_kw);
-        feeder.add_net_kw(-solar_kw);
-        feeder.add_net_kw(-battery_kw);
-        let feeder_kw = feeder.net_kw();
-        let tracking_error_kw = feeder_kw - target_kw;
-        let feeder_name = feeder.name();
-
-        tracking_error_sq_sum += tracking_error_kw * tracking_error_kw;
-        tracking_error_count += 1;
-        requested_curtailment_sum_kw += dr_requested_kw;
-        achieved_curtailment_sum_kw += dr_achieved_kw;
-        feeder_peak_load_kw = feeder_peak_load_kw.max(feeder_kw);
-
-        let soc = battery.soc * 100.0;
-        println!(
-            "Time (Hr) {t}: {baseload_device}={base_demand_kw:.2} kW, \
-            RawBase={base_demand_kw_raw:.2} kW, \
-            Forecast={forecast_kw:.2} kW, \
-            Target={target_kw:.2} kW, \
-            {solar_device}={solar_kw:.2} kW, \
-            {ev_device}={ev_kw:.2} kW (Req={ev_requested_kw:.2}, DR={ev_after_dr_kw:.2}, Cap={ev_capped_kw:.2}), \
-            {battery_device}={battery_kw:.2} kW (SoC={soc:.1}%), \
-            {feeder_name}={feeder_kw:.2} kW, \
-            Error={tracking_error_kw:.2} kW, \
-            DR(req={dr_requested_kw:.2}, done={dr_achieved_kw:.2}), \
-            LimitOK={}",
-            feeder.within_limits()
-        );
-    });
-
-    let rmse_tracking_kw = if tracking_error_count > 0 {
-        (tracking_error_sq_sum / tracking_error_count as f32).sqrt()
-    } else {
-        0.0
-    };
-
-    let curtailment_pct = if requested_curtailment_sum_kw > 0.0 {
-        100.0 * achieved_curtailment_sum_kw / requested_curtailment_sum_kw
-    } else {
-        0.0
-    };
-
-    println!("\n--- KPI Report ---");
-    println!("RMSE tracking error: {rmse_tracking_kw:.3} kW");
-    println!("Curtailment achieved: {curtailment_pct:.1}%");
-    println!("Feeder peak load: {feeder_peak_load_kw:.2} kW");
+    // Print KPI report
+    let kpi = KpiReport::from_results(
+        &results,
+        engine.config().dt_hours,
+        engine.battery().capacity_kwh,
+    );
+    println!("\n{kpi}");
 }
