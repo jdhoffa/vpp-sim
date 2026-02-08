@@ -24,3 +24,7 @@ jobs:
       run: cargo build --features api --verbose
     - name: Test with API feature
       run: cargo test --features api --verbose
+    - name: Build with TUI feature
+      run: cargo build --features tui --verbose
+    - name: Test with TUI feature
+      run: cargo test --features tui --verbose

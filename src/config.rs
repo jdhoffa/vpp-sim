@@ -6,6 +6,18 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+use crate::devices::{
+    BaseLoad, Battery, Device, DeviceContext, EvCharger, Solar, SolarPv, SolarPvAr1,
+};
+use crate::forecast::NaiveForecast;
+use crate::sim::event::DemandResponseEvent;
+use crate::sim::feeder::Feeder;
+use crate::sim::schedule::DayAheadSchedule;
+use crate::sim::types::SimConfig;
+
+/// Seed offset for the EV charger RNG to avoid correlation with other devices.
+const EV_SEED_OFFSET: u64 = 57;
+
 /// Top-level scenario configuration parsed from TOML.
 ///
 /// All fields have defaults matching the baseline scenario. Load from
@@ -460,6 +472,120 @@ impl ScenarioConfig {
 
         errors
     }
+
+    /// Builds all scenario components (devices, forecast, schedule, DR event).
+    ///
+    /// Both the CLI runner and the TUI call this to avoid duplicating
+    /// device-construction logic.
+    pub fn build(&self) -> ScenarioComponents {
+        let s = &self.simulation;
+        let mut sim_config = SimConfig::new(s.steps_per_day, s.days, s.seed);
+        sim_config.imbalance_price_per_kwh = s.imbalance_price_per_kwh;
+
+        // Build baseline forecast, then clone for the sim load device
+        let bl = &self.baseload;
+        let load = BaseLoad::new(
+            bl.base_kw,
+            bl.amp_kw,
+            bl.phase_rad,
+            bl.noise_std,
+            &sim_config,
+            s.seed,
+        );
+        let mut baseline_load = load.clone();
+        let mut baseline = Vec::with_capacity(sim_config.steps_per_day);
+        for t in 0..sim_config.steps_per_day {
+            baseline.push(baseline_load.power_kw(&DeviceContext::new(t)));
+        }
+
+        let sol = &self.solar;
+        let pv: Solar = match sol.model.as_str() {
+            "ar1" => Solar::Ar1(SolarPvAr1::new(
+                sol.kw_peak,
+                sol.sunrise_idx,
+                sol.sunset_idx,
+                sol.alpha,
+                sol.cloud_noise_std,
+                &sim_config,
+                s.seed,
+            )),
+            _ => Solar::Simple(SolarPv::new(
+                sol.kw_peak,
+                sol.sunrise_idx,
+                sol.sunset_idx,
+                sol.noise_std,
+                &sim_config,
+                s.seed,
+            )),
+        };
+
+        let bat = &self.battery;
+        let battery = Battery::new(
+            bat.capacity_kwh,
+            bat.initial_soc,
+            bat.max_charge_kw,
+            bat.max_discharge_kw,
+            bat.eta_charge,
+            bat.eta_discharge,
+            &sim_config,
+        );
+
+        let e = &self.ev;
+        let ev = EvCharger::new(
+            e.max_charge_kw,
+            e.demand_kwh_min,
+            e.demand_kwh_max,
+            e.dwell_steps_min,
+            e.dwell_steps_max,
+            &sim_config,
+            s.seed.wrapping_add(EV_SEED_OFFSET),
+        );
+
+        let f = &self.feeder;
+        let feeder = Feeder::with_limits("MainFeeder", f.max_import_kw, f.max_export_kw);
+
+        let forecaster = NaiveForecast;
+        let load_forecast = forecaster.forecast(&baseline, sim_config.steps_per_day);
+        let target_schedule = DayAheadSchedule::flat_target(&load_forecast);
+
+        let dr = &self.dr_event;
+        let dr_event =
+            DemandResponseEvent::new(dr.start_step, dr.end_step, dr.requested_reduction_kw);
+
+        ScenarioComponents {
+            sim_config,
+            load,
+            pv,
+            battery,
+            ev,
+            feeder,
+            load_forecast,
+            target_schedule,
+            dr_event,
+        }
+    }
+}
+
+/// Components built from a [`ScenarioConfig`].
+pub struct ScenarioComponents {
+    /// Simulation timing and pricing config.
+    pub sim_config: SimConfig,
+    /// Baseload device.
+    pub load: BaseLoad,
+    /// Solar PV device (simple or ar1).
+    pub pv: Solar,
+    /// Battery storage device.
+    pub battery: Battery,
+    /// EV charger device.
+    pub ev: EvCharger,
+    /// Feeder with import/export limits.
+    pub feeder: Feeder,
+    /// Per-step load forecast (one day, wraps).
+    pub load_forecast: Vec<f32>,
+    /// Per-step target feeder schedule (one day, wraps).
+    pub target_schedule: Vec<f32>,
+    /// Demand response event.
+    pub dr_event: DemandResponseEvent,
 }
 
 #[cfg(test)]

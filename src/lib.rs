@@ -12,3 +12,7 @@ pub mod sim;
 /// REST API for simulation state and telemetry (feature-gated behind `api`).
 #[cfg(feature = "api")]
 pub mod api;
+
+/// Live terminal UI for interactive simulation visualization.
+#[cfg(feature = "tui")]
+pub mod tui;

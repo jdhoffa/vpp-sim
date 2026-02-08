@@ -4,20 +4,9 @@ use std::path::Path;
 use std::process;
 
 use vpp_sim::config::ScenarioConfig;
-
-/// Seed offset for the EV charger RNG to avoid correlation with other devices.
-const EV_SEED_OFFSET: u64 = 57;
-use vpp_sim::devices::{
-    BaseLoad, Battery, Device, DeviceContext, EvCharger, Solar, SolarPv, SolarPvAr1,
-};
-use vpp_sim::forecast::NaiveForecast;
-use vpp_sim::io::export::export_csv;
 use vpp_sim::sim::controller::{GreedyController, NaiveRtController};
 use vpp_sim::sim::engine::Engine;
-use vpp_sim::sim::event::DemandResponseEvent;
-use vpp_sim::sim::feeder::Feeder;
 use vpp_sim::sim::kpi::KpiReport;
-use vpp_sim::sim::schedule::DayAheadSchedule;
 use vpp_sim::sim::types::SimConfig;
 
 /// Parsed CLI arguments.
@@ -30,6 +19,8 @@ struct CliArgs {
     serve: bool,
     #[cfg(feature = "api")]
     port: u16,
+    #[cfg(feature = "tui")]
+    tui: bool,
 }
 
 fn print_help() {
@@ -47,6 +38,8 @@ fn print_help() {
         eprintln!("  --serve                  Start REST API server after simulation");
         eprintln!("  --port <u16>             API server port (default: 3000)");
     }
+    #[cfg(feature = "tui")]
+    eprintln!("  --tui                    Launch live terminal UI");
     eprintln!("  --help                   Show this help message");
     eprintln!();
     eprintln!("If no --scenario or --preset is given, the baseline preset is used.");
@@ -63,6 +56,8 @@ fn parse_args() -> CliArgs {
         serve: false,
         #[cfg(feature = "api")]
         port: 3000,
+        #[cfg(feature = "tui")]
+        tui: false,
     };
 
     let mut i = 1;
@@ -127,6 +122,10 @@ fn parse_args() -> CliArgs {
                     process::exit(1);
                 }
             }
+            #[cfg(feature = "tui")]
+            "--tui" => {
+                cli.tui = true;
+            }
             other => {
                 eprintln!("error: unknown argument \"{other}\"");
                 print_help();
@@ -139,173 +138,60 @@ fn parse_args() -> CliArgs {
     cli
 }
 
-/// Builds shared scenario components (devices, forecast, schedule, DR event).
-///
-/// Returns `(sim_config, load, pv, battery, ev, feeder, load_forecast, target_schedule, dr_event)`.
-#[expect(clippy::type_complexity)]
-fn build_scenario(
-    cfg: &ScenarioConfig,
-) -> (
-    SimConfig,
-    BaseLoad,
-    Solar,
-    Battery,
-    EvCharger,
-    Feeder,
-    Vec<f32>,
-    Vec<f32>,
-    DemandResponseEvent,
-) {
-    let s = &cfg.simulation;
-    let mut sim_config = SimConfig::new(s.steps_per_day, s.days, s.seed);
-    sim_config.imbalance_price_per_kwh = s.imbalance_price_per_kwh;
-
-    // Build baseline forecast from a throwaway load instance
-    let bl = &cfg.baseload;
-    let mut baseline_load = BaseLoad::new(
-        bl.base_kw,
-        bl.amp_kw,
-        bl.phase_rad,
-        bl.noise_std,
-        &sim_config,
-        s.seed,
-    );
-    let mut baseline = Vec::with_capacity(sim_config.steps_per_day);
-    for t in 0..sim_config.steps_per_day {
-        baseline.push(baseline_load.power_kw(&DeviceContext::new(t)));
-    }
-
-    let load = BaseLoad::new(
-        bl.base_kw,
-        bl.amp_kw,
-        bl.phase_rad,
-        bl.noise_std,
-        &sim_config,
-        s.seed,
-    );
-
-    let sol = &cfg.solar;
-    let pv: Solar = match sol.model.as_str() {
-        "ar1" => Solar::Ar1(SolarPvAr1::new(
-            sol.kw_peak,
-            sol.sunrise_idx,
-            sol.sunset_idx,
-            sol.alpha,
-            sol.cloud_noise_std,
-            &sim_config,
-            s.seed,
-        )),
-        _ => Solar::Simple(SolarPv::new(
-            sol.kw_peak,
-            sol.sunrise_idx,
-            sol.sunset_idx,
-            sol.noise_std,
-            &sim_config,
-            s.seed,
-        )),
-    };
-
-    let bat = &cfg.battery;
-    let battery = Battery::new(
-        bat.capacity_kwh,
-        bat.initial_soc,
-        bat.max_charge_kw,
-        bat.max_discharge_kw,
-        bat.eta_charge,
-        bat.eta_discharge,
-        &sim_config,
-    );
-
-    let e = &cfg.ev;
-    let ev = EvCharger::new(
-        e.max_charge_kw,
-        e.demand_kwh_min,
-        e.demand_kwh_max,
-        e.dwell_steps_min,
-        e.dwell_steps_max,
-        &sim_config,
-        s.seed.wrapping_add(EV_SEED_OFFSET),
-    );
-
-    let f = &cfg.feeder;
-    let feeder = Feeder::with_limits("MainFeeder", f.max_import_kw, f.max_export_kw);
-
-    let forecaster = NaiveForecast;
-    let load_forecast = forecaster.forecast(&baseline, sim_config.steps_per_day);
-    let target_schedule = DayAheadSchedule::flat_target(&load_forecast);
-
-    let dr = &cfg.dr_event;
-    let dr_event = DemandResponseEvent::new(dr.start_step, dr.end_step, dr.requested_reduction_kw);
-
-    (
-        sim_config,
-        load,
-        pv,
-        battery,
-        ev,
-        feeder,
-        load_forecast,
-        target_schedule,
-        dr_event,
-    )
-}
-
 /// Runs the simulation with the configured controller and returns config, results, and KPI.
 fn run_simulation(
     cfg: &ScenarioConfig,
 ) -> (SimConfig, Vec<vpp_sim::sim::types::StepResult>, KpiReport) {
-    let (sim_config, load, pv, battery, ev, feeder, load_forecast, target_schedule, dr_event) =
-        build_scenario(cfg);
-
-    let bat_cap = battery.capacity_kwh;
-    let dt = sim_config.dt_hours;
+    let c = cfg.build();
+    let bat_cap = c.battery.capacity_kwh;
+    let dt = c.sim_config.dt_hours;
 
     if cfg.simulation.controller == "greedy" {
         let controller = GreedyController::new(
-            &load_forecast,
-            &target_schedule,
+            &c.load_forecast,
+            &c.target_schedule,
             cfg.battery.capacity_kwh,
             cfg.battery.max_charge_kw,
             cfg.battery.max_discharge_kw,
             cfg.battery.initial_soc,
             cfg.battery.eta_charge,
             cfg.battery.eta_discharge,
-            sim_config.dt_hours,
+            c.sim_config.dt_hours,
             cfg.solar.kw_peak,
             cfg.solar.sunrise_idx,
             cfg.solar.sunset_idx,
         );
         let mut engine = Engine::new(
-            sim_config.clone(),
-            load,
-            pv,
-            battery,
-            ev,
-            feeder,
+            c.sim_config,
+            c.load,
+            c.pv,
+            c.battery,
+            c.ev,
+            c.feeder,
             controller,
-            load_forecast,
-            target_schedule,
-            dr_event,
+            c.load_forecast,
+            c.target_schedule,
+            c.dr_event,
         );
         let results = engine.run();
         let kpi = KpiReport::from_results(&results, dt, bat_cap);
-        (sim_config, results, kpi)
+        (engine.config().clone(), results, kpi)
     } else {
         let mut engine = Engine::new(
-            sim_config.clone(),
-            load,
-            pv,
-            battery,
-            ev,
-            feeder,
+            c.sim_config,
+            c.load,
+            c.pv,
+            c.battery,
+            c.ev,
+            c.feeder,
             NaiveRtController,
-            load_forecast,
-            target_schedule,
-            dr_event,
+            c.load_forecast,
+            c.target_schedule,
+            c.dr_event,
         );
         let results = engine.run();
         let kpi = KpiReport::from_results(&results, dt, bat_cap);
-        (sim_config, results, kpi)
+        (engine.config().clone(), results, kpi)
     }
 }
 
@@ -347,8 +233,16 @@ fn main() {
         process::exit(1);
     }
 
+    // Launch TUI if requested
+    #[cfg(feature = "tui")]
+    if cli.tui {
+        let preset = cli.preset.as_deref().unwrap_or("baseline");
+        vpp_sim::tui::run(preset);
+        return;
+    }
+
     // Build and run
-    #[expect(unused_variables)]
+    #[cfg_attr(not(feature = "api"), expect(unused_variables))]
     let (sim_config, results, kpi) = run_simulation(&scenario);
 
     // Print per-step results
@@ -361,7 +255,7 @@ fn main() {
 
     // Export CSV if requested
     if let Some(ref path) = cli.telemetry_out {
-        if let Err(e) = export_csv(&results, Path::new(path)) {
+        if let Err(e) = vpp_sim::io::export::export_csv(&results, Path::new(path)) {
             eprintln!("error: failed to write CSV: {e}");
             process::exit(1);
         }
