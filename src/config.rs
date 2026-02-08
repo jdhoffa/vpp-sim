@@ -49,6 +49,8 @@ pub struct SimulationConfig {
     pub seed: u64,
     /// Imbalance settlement price per kWh.
     pub imbalance_price_per_kwh: f32,
+    /// Controller type: `"naive"` or `"greedy"`.
+    pub controller: String,
 }
 
 impl Default for SimulationConfig {
@@ -58,6 +60,7 @@ impl Default for SimulationConfig {
             days: 1,
             seed: 42,
             imbalance_price_per_kwh: 0.10,
+            controller: "naive".to_string(),
         }
     }
 }
@@ -398,6 +401,12 @@ impl ScenarioConfig {
                 message: "must be > 0".into(),
             });
         }
+        if s.controller != "naive" && s.controller != "greedy" {
+            errors.push(ConfigError {
+                field: "simulation.controller".into(),
+                message: format!("must be \"naive\" or \"greedy\", got \"{}\"", s.controller),
+            });
+        }
 
         let sol = &self.solar;
         if sol.model != "simple" && sol.model != "ar1" {
@@ -559,6 +568,25 @@ bogus_field = true
         cfg.battery.initial_soc = 1.5;
         let errors = cfg.validate();
         assert!(errors.iter().any(|e| e.field == "battery.initial_soc"));
+    }
+
+    #[test]
+    fn validation_catches_bad_controller() {
+        let mut cfg = ScenarioConfig::baseline();
+        cfg.simulation.controller = "bogus".to_string();
+        let errors = cfg.validate();
+        assert!(errors.iter().any(|e| e.field == "simulation.controller"));
+    }
+
+    #[test]
+    fn validation_accepts_greedy_controller() {
+        let mut cfg = ScenarioConfig::baseline();
+        cfg.simulation.controller = "greedy".to_string();
+        let errors = cfg.validate();
+        assert!(
+            errors.is_empty(),
+            "greedy controller should be valid: {errors:?}"
+        );
     }
 
     #[test]

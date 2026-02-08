@@ -12,7 +12,7 @@ use vpp_sim::devices::{
 };
 use vpp_sim::forecast::NaiveForecast;
 use vpp_sim::io::export::export_csv;
-use vpp_sim::sim::controller::NaiveRtController;
+use vpp_sim::sim::controller::{GreedyController, NaiveRtController};
 use vpp_sim::sim::engine::Engine;
 use vpp_sim::sim::event::DemandResponseEvent;
 use vpp_sim::sim::feeder::Feeder;
@@ -108,8 +108,23 @@ fn parse_args() -> CliArgs {
     cli
 }
 
-/// Builds a simulation engine from a validated `ScenarioConfig`.
-fn build_engine(cfg: &ScenarioConfig) -> Engine<NaiveRtController> {
+/// Builds shared scenario components (devices, forecast, schedule, DR event).
+///
+/// Returns `(sim_config, load, pv, battery, ev, feeder, load_forecast, target_schedule, dr_event)`.
+#[allow(clippy::type_complexity)]
+fn build_scenario(
+    cfg: &ScenarioConfig,
+) -> (
+    SimConfig,
+    BaseLoad,
+    Solar,
+    Battery,
+    EvCharger,
+    Feeder,
+    Vec<f32>,
+    Vec<f32>,
+    DemandResponseEvent,
+) {
     let s = &cfg.simulation;
     let mut sim_config = SimConfig::new(s.steps_per_day, s.days, s.seed);
     sim_config.imbalance_price_per_kwh = s.imbalance_price_per_kwh;
@@ -191,18 +206,74 @@ fn build_engine(cfg: &ScenarioConfig) -> Engine<NaiveRtController> {
     let dr = &cfg.dr_event;
     let dr_event = DemandResponseEvent::new(dr.start_step, dr.end_step, dr.requested_reduction_kw);
 
-    Engine::new(
+    (
         sim_config,
         load,
         pv,
         battery,
         ev,
         feeder,
-        NaiveRtController,
         load_forecast,
         target_schedule,
         dr_event,
     )
+}
+
+/// Runs the simulation with the configured controller and returns results + KPI.
+fn run_simulation(cfg: &ScenarioConfig) -> (Vec<vpp_sim::sim::types::StepResult>, KpiReport) {
+    let (sim_config, load, pv, battery, ev, feeder, load_forecast, target_schedule, dr_event) =
+        build_scenario(cfg);
+
+    let bat_cap = battery.capacity_kwh;
+    let dt = sim_config.dt_hours;
+
+    if cfg.simulation.controller == "greedy" {
+        let controller = GreedyController::new(
+            &load_forecast,
+            &target_schedule,
+            cfg.battery.capacity_kwh,
+            cfg.battery.max_charge_kw,
+            cfg.battery.max_discharge_kw,
+            cfg.battery.initial_soc,
+            cfg.battery.eta_charge,
+            cfg.battery.eta_discharge,
+            sim_config.dt_hours,
+            cfg.solar.kw_peak,
+            cfg.solar.sunrise_idx,
+            cfg.solar.sunset_idx,
+        );
+        let mut engine = Engine::new(
+            sim_config,
+            load,
+            pv,
+            battery,
+            ev,
+            feeder,
+            controller,
+            load_forecast,
+            target_schedule,
+            dr_event,
+        );
+        let results = engine.run();
+        let kpi = KpiReport::from_results(&results, dt, bat_cap);
+        (results, kpi)
+    } else {
+        let mut engine = Engine::new(
+            sim_config,
+            load,
+            pv,
+            battery,
+            ev,
+            feeder,
+            NaiveRtController,
+            load_forecast,
+            target_schedule,
+            dr_event,
+        );
+        let results = engine.run();
+        let kpi = KpiReport::from_results(&results, dt, bat_cap);
+        (results, kpi)
+    }
 }
 
 fn main() {
@@ -244,8 +315,7 @@ fn main() {
     }
 
     // Build and run
-    let mut engine = build_engine(&scenario);
-    let results = engine.run();
+    let (results, kpi) = run_simulation(&scenario);
 
     // Print per-step results
     for r in &results {
@@ -253,11 +323,6 @@ fn main() {
     }
 
     // Print KPI report
-    let kpi = KpiReport::from_results(
-        &results,
-        engine.config().dt_hours,
-        engine.battery().capacity_kwh,
-    );
     println!("\n{kpi}");
 
     // Export CSV if requested
