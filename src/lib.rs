@@ -8,3 +8,7 @@ pub mod forecast;
 pub mod io;
 /// Simulation engine, feeder, scheduling, and event modules.
 pub mod sim;
+
+/// REST API for simulation state and telemetry (feature-gated behind `api`).
+#[cfg(feature = "api")]
+pub mod api;

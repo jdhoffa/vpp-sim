@@ -26,6 +26,10 @@ struct CliArgs {
     preset: Option<String>,
     seed_override: Option<u64>,
     telemetry_out: Option<String>,
+    #[cfg(feature = "api")]
+    serve: bool,
+    #[cfg(feature = "api")]
+    port: u16,
 }
 
 fn print_help() {
@@ -38,6 +42,11 @@ fn print_help() {
     eprintln!("  --preset <name>          Use a built-in preset (baseline)");
     eprintln!("  --seed <u64>             Override random seed");
     eprintln!("  --telemetry-out <path>   Export step results to CSV");
+    #[cfg(feature = "api")]
+    {
+        eprintln!("  --serve                  Start REST API server after simulation");
+        eprintln!("  --port <u16>             API server port (default: 3000)");
+    }
     eprintln!("  --help                   Show this help message");
     eprintln!();
     eprintln!("If no --scenario or --preset is given, the baseline preset is used.");
@@ -50,6 +59,10 @@ fn parse_args() -> CliArgs {
         preset: None,
         seed_override: None,
         telemetry_out: None,
+        #[cfg(feature = "api")]
+        serve: false,
+        #[cfg(feature = "api")]
+        port: 3000,
     };
 
     let mut i = 1;
@@ -96,6 +109,24 @@ fn parse_args() -> CliArgs {
                 }
                 cli.telemetry_out = Some(args[i].clone());
             }
+            #[cfg(feature = "api")]
+            "--serve" => {
+                cli.serve = true;
+            }
+            #[cfg(feature = "api")]
+            "--port" => {
+                i += 1;
+                if i >= args.len() {
+                    eprintln!("error: --port requires a u16 argument");
+                    process::exit(1);
+                }
+                if let Ok(p) = args[i].parse::<u16>() {
+                    cli.port = p;
+                } else {
+                    eprintln!("error: --port value \"{}\" is not a valid u16", args[i]);
+                    process::exit(1);
+                }
+            }
             other => {
                 eprintln!("error: unknown argument \"{other}\"");
                 print_help();
@@ -111,7 +142,7 @@ fn parse_args() -> CliArgs {
 /// Builds shared scenario components (devices, forecast, schedule, DR event).
 ///
 /// Returns `(sim_config, load, pv, battery, ev, feeder, load_forecast, target_schedule, dr_event)`.
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)]
 fn build_scenario(
     cfg: &ScenarioConfig,
 ) -> (
@@ -219,8 +250,10 @@ fn build_scenario(
     )
 }
 
-/// Runs the simulation with the configured controller and returns results + KPI.
-fn run_simulation(cfg: &ScenarioConfig) -> (Vec<vpp_sim::sim::types::StepResult>, KpiReport) {
+/// Runs the simulation with the configured controller and returns config, results, and KPI.
+fn run_simulation(
+    cfg: &ScenarioConfig,
+) -> (SimConfig, Vec<vpp_sim::sim::types::StepResult>, KpiReport) {
     let (sim_config, load, pv, battery, ev, feeder, load_forecast, target_schedule, dr_event) =
         build_scenario(cfg);
 
@@ -243,7 +276,7 @@ fn run_simulation(cfg: &ScenarioConfig) -> (Vec<vpp_sim::sim::types::StepResult>
             cfg.solar.sunset_idx,
         );
         let mut engine = Engine::new(
-            sim_config,
+            sim_config.clone(),
             load,
             pv,
             battery,
@@ -256,10 +289,10 @@ fn run_simulation(cfg: &ScenarioConfig) -> (Vec<vpp_sim::sim::types::StepResult>
         );
         let results = engine.run();
         let kpi = KpiReport::from_results(&results, dt, bat_cap);
-        (results, kpi)
+        (sim_config, results, kpi)
     } else {
         let mut engine = Engine::new(
-            sim_config,
+            sim_config.clone(),
             load,
             pv,
             battery,
@@ -272,7 +305,7 @@ fn run_simulation(cfg: &ScenarioConfig) -> (Vec<vpp_sim::sim::types::StepResult>
         );
         let results = engine.run();
         let kpi = KpiReport::from_results(&results, dt, bat_cap);
-        (results, kpi)
+        (sim_config, results, kpi)
     }
 }
 
@@ -315,7 +348,8 @@ fn main() {
     }
 
     // Build and run
-    let (results, kpi) = run_simulation(&scenario);
+    #[expect(unused_variables)]
+    let (sim_config, results, kpi) = run_simulation(&scenario);
 
     // Print per-step results
     for r in &results {
@@ -332,5 +366,24 @@ fn main() {
             process::exit(1);
         }
         eprintln!("Telemetry written to {path}");
+    }
+
+    // Start API server if requested
+    #[cfg(feature = "api")]
+    if cli.serve {
+        use std::net::SocketAddr;
+        use std::sync::Arc;
+
+        let state = Arc::new(vpp_sim::api::AppState {
+            config: sim_config,
+            kpi,
+            results,
+        });
+        let addr = SocketAddr::from(([0, 0, 0, 0], cli.port));
+        let rt = tokio::runtime::Runtime::new().unwrap_or_else(|e| {
+            eprintln!("error: failed to create tokio runtime: {e}");
+            process::exit(1);
+        });
+        rt.block_on(vpp_sim::api::serve(state, addr));
     }
 }

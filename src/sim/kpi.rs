@@ -2,13 +2,15 @@
 
 use std::fmt;
 
+use serde::Serialize;
+
 use super::types::StepResult;
 
 /// Aggregate key performance indicators derived from a complete simulation run.
 ///
 /// Computed post-hoc from `Vec<StepResult>` to ensure consistency between
 /// step data and reported metrics.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct KpiReport {
     /// Root-mean-square tracking error (kW).
     pub rmse_tracking_kw: f32,

@@ -2,6 +2,8 @@
 
 use std::fmt;
 
+use serde::Serialize;
+
 /// Centralized simulation configuration.
 ///
 /// All devices and the engine reference this struct for timing parameters,
@@ -16,7 +18,7 @@ use std::fmt;
 /// assert_eq!(cfg.dt_hours, 1.0);
 /// assert_eq!(cfg.total_steps(), 24);
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SimConfig {
     /// Number of simulation steps per day.
     pub steps_per_day: usize,
@@ -110,7 +112,7 @@ pub struct StepDispatch {
 }
 
 /// Complete record of one simulation timestep.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct StepResult {
     /// Timestep index.
     pub timestep: usize,
