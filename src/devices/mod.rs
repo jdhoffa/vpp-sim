@@ -1,8 +1,12 @@
 //! Device simulation components for power system modeling.
 
+/// Residential base-load profile generator.
 pub mod baseload;
+/// Stationary battery storage model.
 pub mod battery;
+/// Electric vehicle charger model.
 pub mod ev_charger;
+/// Solar photovoltaic generation model.
 pub mod solar;
 pub mod types;
 

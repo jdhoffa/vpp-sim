@@ -55,10 +55,7 @@ impl Clock {
     /// # Arguments
     ///
     /// * `f` - A function that takes the current step number as an argument
-    pub fn run<F>(&mut self, mut f: F)
-    where
-        F: FnMut(usize),
-    {
+    pub fn run(&mut self, mut f: impl FnMut(usize)) {
         while let Some(step) = self.tick() {
             f(step);
         }
