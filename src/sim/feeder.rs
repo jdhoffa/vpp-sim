@@ -12,7 +12,7 @@ pub struct Feeder {
 }
 
 impl Feeder {
-    #[cfg(test)]
+    /// Creates a new feeder with no power limits.
     pub fn new(name: &'static str) -> Self {
         Self {
             name,
@@ -22,6 +22,11 @@ impl Feeder {
         }
     }
 
+    /// Creates a new feeder with import and export power limits.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `max_import_kw` or `max_export_kw` is negative.
     pub fn with_limits(name: &'static str, max_import_kw: f32, max_export_kw: f32) -> Self {
         assert!(max_import_kw >= 0.0);
         assert!(max_export_kw >= 0.0);
@@ -34,6 +39,7 @@ impl Feeder {
         }
     }
 
+    /// Resets accumulated net load to zero.
     pub fn reset(&mut self) {
         self.net_kw = 0.0;
     }
@@ -43,30 +49,37 @@ impl Feeder {
         self.net_kw += kw;
     }
 
+    /// Returns the current net load in kW.
     pub fn net_kw(&self) -> f32 {
         self.net_kw
     }
 
+    /// Returns the maximum import (positive load) limit in kW.
     pub fn max_import_kw(&self) -> f32 {
         self.max_import_kw
     }
 
+    /// Returns the maximum export (negative load) limit in kW.
     pub fn max_export_kw(&self) -> f32 {
         self.max_export_kw
     }
 
+    /// Returns the minimum net load (negated export limit).
     pub fn min_net_kw(&self) -> f32 {
         -self.max_export_kw
     }
 
+    /// Returns the maximum net load (import limit).
     pub fn max_net_kw(&self) -> f32 {
         self.max_import_kw
     }
 
+    /// Returns `true` when net load is within import/export limits.
     pub fn within_limits(&self) -> bool {
         self.net_kw >= self.min_net_kw() && self.net_kw <= self.max_net_kw()
     }
 
+    /// Returns the feeder name.
     pub fn name(&self) -> &'static str {
         self.name
     }

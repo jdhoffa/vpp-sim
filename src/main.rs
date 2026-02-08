@@ -1,172 +1,283 @@
-mod devices;
-mod forecast;
-mod sim;
+//! VPP simulator entry point — CLI wiring and config-driven engine construction.
 
-use devices::{BaseLoad, Battery, Device, DeviceContext, EvCharger, SolarPv};
-use forecast::NaiveForecast;
-use sim::clock::Clock;
-use sim::controller::NaiveRtController;
-use sim::event::DemandResponseEvent;
-use sim::feeder::Feeder;
-use sim::schedule::DayAheadSchedule;
+use std::path::Path;
+use std::process;
+
+use vpp_sim::config::ScenarioConfig;
+use vpp_sim::sim::controller::{GreedyController, NaiveRtController};
+use vpp_sim::sim::engine::Engine;
+use vpp_sim::sim::kpi::KpiReport;
+use vpp_sim::sim::types::SimConfig;
+
+/// Parsed CLI arguments.
+struct CliArgs {
+    scenario_path: Option<String>,
+    preset: Option<String>,
+    seed_override: Option<u64>,
+    telemetry_out: Option<String>,
+    #[cfg(feature = "api")]
+    serve: bool,
+    #[cfg(feature = "api")]
+    port: u16,
+    #[cfg(feature = "tui")]
+    tui: bool,
+}
+
+fn print_help() {
+    eprintln!("vpp-sim — Neighborhood-scale Virtual Power Plant simulator");
+    eprintln!();
+    eprintln!("Usage: vpp-sim [OPTIONS]");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  --scenario <path>        Load scenario from TOML config file");
+    eprintln!("  --preset <name>          Use a built-in preset (baseline)");
+    eprintln!("  --seed <u64>             Override random seed");
+    eprintln!("  --telemetry-out <path>   Export step results to CSV");
+    #[cfg(feature = "api")]
+    {
+        eprintln!("  --serve                  Start REST API server after simulation");
+        eprintln!("  --port <u16>             API server port (default: 3000)");
+    }
+    #[cfg(feature = "tui")]
+    eprintln!("  --tui                    Launch live terminal UI");
+    eprintln!("  --help                   Show this help message");
+    eprintln!();
+    eprintln!("If no --scenario or --preset is given, the baseline preset is used.");
+}
+
+fn parse_args() -> CliArgs {
+    let args: Vec<String> = std::env::args().collect();
+    let mut cli = CliArgs {
+        scenario_path: None,
+        preset: None,
+        seed_override: None,
+        telemetry_out: None,
+        #[cfg(feature = "api")]
+        serve: false,
+        #[cfg(feature = "api")]
+        port: 3000,
+        #[cfg(feature = "tui")]
+        tui: false,
+    };
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--help" | "-h" => {
+                print_help();
+                process::exit(0);
+            }
+            "--scenario" => {
+                i += 1;
+                if i >= args.len() {
+                    eprintln!("error: --scenario requires a path argument");
+                    process::exit(1);
+                }
+                cli.scenario_path = Some(args[i].clone());
+            }
+            "--preset" => {
+                i += 1;
+                if i >= args.len() {
+                    eprintln!("error: --preset requires a name argument");
+                    process::exit(1);
+                }
+                cli.preset = Some(args[i].clone());
+            }
+            "--seed" => {
+                i += 1;
+                if i >= args.len() {
+                    eprintln!("error: --seed requires a u64 argument");
+                    process::exit(1);
+                }
+                if let Ok(s) = args[i].parse::<u64>() {
+                    cli.seed_override = Some(s);
+                } else {
+                    eprintln!("error: --seed value \"{}\" is not a valid u64", args[i]);
+                    process::exit(1);
+                }
+            }
+            "--telemetry-out" => {
+                i += 1;
+                if i >= args.len() {
+                    eprintln!("error: --telemetry-out requires a path argument");
+                    process::exit(1);
+                }
+                cli.telemetry_out = Some(args[i].clone());
+            }
+            #[cfg(feature = "api")]
+            "--serve" => {
+                cli.serve = true;
+            }
+            #[cfg(feature = "api")]
+            "--port" => {
+                i += 1;
+                if i >= args.len() {
+                    eprintln!("error: --port requires a u16 argument");
+                    process::exit(1);
+                }
+                if let Ok(p) = args[i].parse::<u16>() {
+                    cli.port = p;
+                } else {
+                    eprintln!("error: --port value \"{}\" is not a valid u16", args[i]);
+                    process::exit(1);
+                }
+            }
+            #[cfg(feature = "tui")]
+            "--tui" => {
+                cli.tui = true;
+            }
+            other => {
+                eprintln!("error: unknown argument \"{other}\"");
+                print_help();
+                process::exit(1);
+            }
+        }
+        i += 1;
+    }
+
+    cli
+}
+
+/// Runs the simulation with the configured controller and returns config, results, and KPI.
+fn run_simulation(
+    cfg: &ScenarioConfig,
+) -> (SimConfig, Vec<vpp_sim::sim::types::StepResult>, KpiReport) {
+    let c = cfg.build();
+    let bat_cap = c.battery.capacity_kwh;
+    let dt = c.sim_config.dt_hours;
+
+    if cfg.simulation.controller == "greedy" {
+        let controller = GreedyController::new(
+            &c.load_forecast,
+            &c.target_schedule,
+            cfg.battery.capacity_kwh,
+            cfg.battery.max_charge_kw,
+            cfg.battery.max_discharge_kw,
+            cfg.battery.initial_soc,
+            cfg.battery.eta_charge,
+            cfg.battery.eta_discharge,
+            c.sim_config.dt_hours,
+            cfg.solar.kw_peak,
+            cfg.solar.sunrise_idx,
+            cfg.solar.sunset_idx,
+        );
+        let mut engine = Engine::new(
+            c.sim_config,
+            c.load,
+            c.pv,
+            c.battery,
+            c.ev,
+            c.feeder,
+            controller,
+            c.load_forecast,
+            c.target_schedule,
+            c.dr_event,
+        );
+        let results = engine.run();
+        let kpi = KpiReport::from_results(&results, dt, bat_cap);
+        (engine.config().clone(), results, kpi)
+    } else {
+        let mut engine = Engine::new(
+            c.sim_config,
+            c.load,
+            c.pv,
+            c.battery,
+            c.ev,
+            c.feeder,
+            NaiveRtController,
+            c.load_forecast,
+            c.target_schedule,
+            c.dr_event,
+        );
+        let results = engine.run();
+        let kpi = KpiReport::from_results(&results, dt, bat_cap);
+        (engine.config().clone(), results, kpi)
+    }
+}
 
 fn main() {
-    let steps_per_day = 24; // 1-hr intervals
-    let mut clock = Clock::new(steps_per_day); // Simulate 1 day
+    let cli = parse_args();
 
-    let mut load = BaseLoad::new(
-        0.8,           /* base_kw */
-        0.7,           /* amp_kw */
-        1.2,           /* phase_rad */
-        0.05,          /* noise_std */
-        steps_per_day, /* steps_per_day */
-        42,            /* seed */
-    );
+    // Load config: --scenario takes priority, then --preset, then baseline default
+    let mut scenario = if let Some(ref path) = cli.scenario_path {
+        match ScenarioConfig::from_toml_file(Path::new(path)) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("{e}");
+                process::exit(1);
+            }
+        }
+    } else if let Some(ref name) = cli.preset {
+        match ScenarioConfig::from_preset(name) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("{e}");
+                process::exit(1);
+            }
+        }
+    } else {
+        ScenarioConfig::baseline()
+    };
 
-    let baseload_device = load.device_type();
-    let mut baseline_load = load.clone();
-    let mut baseline = Vec::with_capacity(steps_per_day);
-    for t in 0..steps_per_day {
-        baseline.push(baseline_load.power_kw(&DeviceContext::new(t)));
+    // Apply seed override
+    if let Some(seed) = cli.seed_override {
+        scenario.simulation.seed = seed;
     }
-    let forecaster = NaiveForecast;
-    let load_forecast = forecaster.forecast(&baseline, steps_per_day);
-    let target_schedule = DayAheadSchedule::flat_target(&load_forecast);
 
-    let mut pv = SolarPv::new(
-        5.0,           /* kw_peak */
-        steps_per_day, /* steps_per_day */
-        6,             /* sunrise_idx (6 AM) */
-        18,            /* sunset_idx (6 PM) */
-        0.05,          /* noise_std */
-        42,            /* seed */
-    );
+    // Validate
+    let errors = scenario.validate();
+    if !errors.is_empty() {
+        for e in &errors {
+            eprintln!("{e}");
+        }
+        process::exit(1);
+    }
 
-    let solar_device = pv.device_type();
+    // Launch TUI if requested
+    #[cfg(feature = "tui")]
+    if cli.tui {
+        let preset = cli.preset.as_deref().unwrap_or("baseline");
+        vpp_sim::tui::run(preset);
+        return;
+    }
 
-    let mut battery = Battery::new(
-        10.0,          /* capacity_kwh */
-        0.5,           /* initial_soc */
-        5.0,           /* max_charge_kw */
-        5.0,           /* max_discharge_kw */
-        0.95,          /* eta_c */
-        0.95,          /* eta_d */
-        steps_per_day, /* steps_per_day */
-    );
+    // Build and run
+    #[cfg_attr(not(feature = "api"), expect(unused_variables))]
+    let (sim_config, results, kpi) = run_simulation(&scenario);
 
-    let battery_device = battery.device_type();
-    let mut ev = EvCharger::new(
-        7.2,           /* max_charge_kw */
-        steps_per_day, /* steps_per_day */
-        4.0,           /* demand_kwh_min */
-        14.0,          /* demand_kwh_max */
-        3,             /* dwell_steps_min */
-        10,            /* dwell_steps_max */
-        99,            /* seed */
-    );
-    let ev_device = ev.device_type();
+    // Print per-step results
+    for r in &results {
+        println!("{r}");
+    }
 
-    let mut feeder = Feeder::with_limits(
-        "MainFeeder",
-        5.0, /* max_import_kw */
-        4.0, /* max_export_kw */
-    );
+    // Print KPI report
+    println!("\n{kpi}");
 
-    // Example external DR event: request 1.5kW reduction from hour 17 to 21.
-    let dr_event = DemandResponseEvent::new(17, 21, 1.5);
+    // Export CSV if requested
+    if let Some(ref path) = cli.telemetry_out {
+        if let Err(e) = vpp_sim::io::export::export_csv(&results, Path::new(path)) {
+            eprintln!("error: failed to write CSV: {e}");
+            process::exit(1);
+        }
+        eprintln!("Telemetry written to {path}");
+    }
 
-    let controller = NaiveRtController;
+    // Start API server if requested
+    #[cfg(feature = "api")]
+    if cli.serve {
+        use std::net::SocketAddr;
+        use std::sync::Arc;
 
-    let mut tracking_error_sq_sum = 0.0_f32;
-    let mut tracking_error_count = 0_usize;
-    let mut requested_curtailment_sum_kw = 0.0_f32;
-    let mut achieved_curtailment_sum_kw = 0.0_f32;
-    let mut feeder_peak_load_kw = 0.0_f32;
-
-    clock.run(|t| {
-        let context = DeviceContext::new(t);
-
-        let base_demand_kw_raw = load.power_kw(&context);
-        let forecast_kw = load_forecast[context.timestep];
-        let target_kw = target_schedule[context.timestep];
-        let solar_kw = pv.power_kw(&context);
-        let ev_requested_kw = ev.requested_power_kw(&context);
-
-        let dr_requested_kw = dr_event.requested_reduction_at_kw(t);
-        let (base_demand_kw, ev_after_dr_kw, dr_achieved_kw) = controller.apply_demand_response_kw(
-            base_demand_kw_raw,
-            ev_requested_kw,
-            dr_requested_kw,
-        );
-
-        let net_fixed_kw = base_demand_kw - solar_kw;
-        let ev_capped_kw = controller.capped_flexible_load_kw(
-            net_fixed_kw,
-            ev_after_dr_kw,
-            feeder.max_import_kw(),
-            battery.max_discharge_kw,
-        );
-        let ev_context = DeviceContext::with_setpoint(context.timestep, ev_capped_kw);
-        let ev_kw = ev.power_kw(&ev_context);
-
-        let net_without_battery = net_fixed_kw + ev_kw;
-        let battery_setpoint_kw = controller.constrained_battery_setpoint_kw(
-            net_without_battery,
-            target_kw,
-            feeder.max_import_kw(),
-            feeder.max_export_kw(),
-            battery.max_charge_kw,
-            battery.max_discharge_kw,
-        );
-        let battery_context = DeviceContext::with_setpoint(context.timestep, battery_setpoint_kw);
-
-        let battery_kw = battery.power_kw(&battery_context);
-        feeder.reset();
-        feeder.add_net_kw(base_demand_kw);
-        feeder.add_net_kw(ev_kw);
-        feeder.add_net_kw(-solar_kw);
-        feeder.add_net_kw(-battery_kw);
-        let feeder_kw = feeder.net_kw();
-        let tracking_error_kw = feeder_kw - target_kw;
-        let feeder_name = feeder.name();
-
-        tracking_error_sq_sum += tracking_error_kw * tracking_error_kw;
-        tracking_error_count += 1;
-        requested_curtailment_sum_kw += dr_requested_kw;
-        achieved_curtailment_sum_kw += dr_achieved_kw;
-        feeder_peak_load_kw = feeder_peak_load_kw.max(feeder_kw);
-
-        let soc = battery.soc * 100.0;
-        println!(
-            "Time (Hr) {t}: {baseload_device}={base_demand_kw:.2} kW, \
-            RawBase={base_demand_kw_raw:.2} kW, \
-            Forecast={forecast_kw:.2} kW, \
-            Target={target_kw:.2} kW, \
-            {solar_device}={solar_kw:.2} kW, \
-            {ev_device}={ev_kw:.2} kW (Req={ev_requested_kw:.2}, DR={ev_after_dr_kw:.2}, Cap={ev_capped_kw:.2}), \
-            {battery_device}={battery_kw:.2} kW (SoC={soc:.1}%), \
-            {feeder_name}={feeder_kw:.2} kW, \
-            Error={tracking_error_kw:.2} kW, \
-            DR(req={dr_requested_kw:.2}, done={dr_achieved_kw:.2}), \
-            LimitOK={}",
-            feeder.within_limits()
-        );
-    });
-
-    let rmse_tracking_kw = if tracking_error_count > 0 {
-        (tracking_error_sq_sum / tracking_error_count as f32).sqrt()
-    } else {
-        0.0
-    };
-
-    let curtailment_pct = if requested_curtailment_sum_kw > 0.0 {
-        100.0 * achieved_curtailment_sum_kw / requested_curtailment_sum_kw
-    } else {
-        0.0
-    };
-
-    println!("\n--- KPI Report ---");
-    println!("RMSE tracking error: {rmse_tracking_kw:.3} kW");
-    println!("Curtailment achieved: {curtailment_pct:.1}%");
-    println!("Feeder peak load: {feeder_peak_load_kw:.2} kW");
+        let state = Arc::new(vpp_sim::api::AppState {
+            config: sim_config,
+            kpi,
+            results,
+        });
+        let addr = SocketAddr::from(([0, 0, 0, 0], cli.port));
+        let rt = tokio::runtime::Runtime::new().unwrap_or_else(|e| {
+            eprintln!("error: failed to create tokio runtime: {e}");
+            process::exit(1);
+        });
+        rt.block_on(vpp_sim::api::serve(state, addr));
+    }
 }

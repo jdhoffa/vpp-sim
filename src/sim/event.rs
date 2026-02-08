@@ -10,6 +10,11 @@ pub struct DemandResponseEvent {
 }
 
 impl DemandResponseEvent {
+    /// Creates a new demand-response event spanning `[start_step, end_step)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `start_step >= end_step` or `requested_reduction_kw < 0.0`.
     pub fn new(start_step: usize, end_step: usize, requested_reduction_kw: f32) -> Self {
         assert!(start_step < end_step);
         assert!(requested_reduction_kw >= 0.0);
@@ -21,10 +26,12 @@ impl DemandResponseEvent {
         }
     }
 
+    /// Returns `true` when `timestep` falls within the active window.
     pub fn is_active(&self, timestep: usize) -> bool {
         timestep >= self.start_step && timestep < self.end_step
     }
 
+    /// Returns the requested reduction in kW if the event is active, otherwise `0.0`.
     pub fn requested_reduction_at_kw(&self, timestep: usize) -> f32 {
         if self.is_active(timestep) {
             self.requested_reduction_kw
