@@ -2,13 +2,13 @@ mod cli;
 mod devices;
 mod forecast;
 mod reporting;
+mod runner;
 mod sim;
-mod simulation;
 mod telemetry;
 
 use cli::{parse_args, print_usage};
 use reporting::print_kpi_report;
-use simulation::run_demo_simulation;
+use runner::run_demo;
 use telemetry::write_telemetry_to_path;
 
 fn main() {
@@ -21,7 +21,7 @@ fn main() {
         }
     };
 
-    let result = run_demo_simulation(true);
+    let result = run_demo(true);
     if let Some(path) = opts.telemetry_out.as_deref() {
         if let Err(err) = write_telemetry_to_path(path, &result.telemetry) {
             eprintln!(

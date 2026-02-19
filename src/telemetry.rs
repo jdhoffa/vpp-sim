@@ -57,11 +57,11 @@ pub fn write_telemetry_to_path(path: &Path, rows: &[TelemetryRow]) -> io::Result
 #[cfg(test)]
 mod tests {
     use super::{TELEMETRY_SCHEMA_V1_HEADER, write_telemetry_csv};
-    use crate::simulation::run_demo_simulation;
+    use crate::runner::run_demo;
 
     #[test]
     fn telemetry_csv_has_schema_v1_header_and_rows_per_timestep() {
-        let result = run_demo_simulation(false);
+        let result = run_demo(false);
         assert_eq!(result.telemetry.len(), 24);
 
         let mut out = Vec::new();
@@ -75,8 +75,8 @@ mod tests {
 
     #[test]
     fn telemetry_export_is_deterministic_for_fixed_seed_and_config() {
-        let run_a = run_demo_simulation(false);
-        let run_b = run_demo_simulation(false);
+        let run_a = run_demo(false);
+        let run_b = run_demo(false);
 
         let mut out_a = Vec::new();
         write_telemetry_csv(&mut out_a, &run_a.telemetry).expect("first export should succeed");

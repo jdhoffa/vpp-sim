@@ -1,4 +1,4 @@
-use crate::simulation::SimulationKpis;
+use crate::runner::SimulationKpis;
 
 pub fn print_kpi_report(kpis: &SimulationKpis) {
     println!("\n--- KPI Report ---");

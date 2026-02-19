@@ -18,7 +18,7 @@ pub struct SimulationResult {
     pub kpis: SimulationKpis,
 }
 
-pub fn run_demo_simulation(print_readable_log: bool) -> SimulationResult {
+pub fn run_demo(print_readable_log: bool) -> SimulationResult {
     let steps_per_day = 24; // 1-hr intervals
     let dt_hr = 24.0 / steps_per_day as f32;
     let mut clock = Clock::new(steps_per_day); // Simulate 1 day
