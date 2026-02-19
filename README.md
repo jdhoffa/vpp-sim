@@ -43,6 +43,12 @@ Running the default binary triggers a demonstrative 24-step (1-hr interval) simu
 cargo run --release
 ```
 
+Write per-timestep telemetry to CSV (schema v1):
+
+```bash
+cargo run --release -- --telemetry-out telemetry.csv
+```
+
 #### Example output:
 ```
 Time (Hr) 0: BaseLoad=1.35 kW, RawBase=1.35 kW, Forecast=0.79 kW, Target=0.79 kW,
@@ -67,6 +73,8 @@ Notes:
 
 - Example values are illustrative; exact numbers depend on random seeds and configuration.
 - `LimitOK=true` indicates the feeder stayed within configured import/export limits at that timestep.
+- `--telemetry-out` writes CSV columns:
+  `timestep,time_hr,target_kw,feeder_kw,tracking_error_kw,baseload_kw,solar_kw,ev_requested_kw,ev_dispatched_kw,battery_kw,battery_soc,dr_requested_kw,dr_achieved_kw,limit_ok`
 
 ## Documentation
 The documentation for this project can be opened locally using:
