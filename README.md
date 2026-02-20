@@ -113,7 +113,5 @@ cargo doc --open
 
 It contains detailed information about the architecture, modules, and usage of the simulator.
 
-If GitHub Pages is not yet enabled for this repository, set **Settings > Pages > Source** to **Deploy from a branch**, branch **`gh-pages`** (root).
-
 ## License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
