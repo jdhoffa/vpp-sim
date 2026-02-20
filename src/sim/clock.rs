@@ -5,7 +5,8 @@
 ///
 /// # Examples
 ///
-/// ```
+/// Note: `vpp-sim` currently ships as a binary-first crate; this snippet is illustrative.
+/// ```ignore
 /// use vpp_sim::sim::clock::Clock;
 ///
 /// let mut clock = Clock::new(3);

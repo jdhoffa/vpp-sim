@@ -8,8 +8,10 @@ use rand::{SeedableRng, rngs::StdRng};
 ///
 /// # Examples
 ///
-/// ```
+/// Note: `vpp-sim` currently ships as a binary-first crate; this snippet is illustrative.
+/// ```ignore
 /// use vpp_sim::devices::baseload::BaseLoad;
+/// use vpp_sim::devices::types::{Device, DeviceContext};
 ///
 /// // Create a baseload with typical parameters
 /// let mut load = BaseLoad::new(
@@ -22,7 +24,7 @@ use rand::{SeedableRng, rngs::StdRng};
 /// );
 ///
 /// // Get demand at noon
-/// let demand = load.power_kw(12);
+/// let demand = load.power_kw(&DeviceContext::new(12));
 /// ```
 #[derive(Debug, Clone)]
 pub struct BaseLoad {

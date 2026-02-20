@@ -1,5 +1,6 @@
 # vpp-sim
 [![Rust](https://github.com/jdhoffa/vpp-sim/actions/workflows/rust.yml/badge.svg)](https://github.com/jdhoffa/vpp-sim/actions/workflows/rust.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 The **Virtual Power Plant Simulator** is an open source project aiming to simulate a neighborhood-scale Virtual Power Plant (VPP) in real time.
 
@@ -39,20 +40,25 @@ Running the default binary triggers a demonstrative 24-step (1-hr interval) simu
 - A demand response event window
 - Post-run KPI summary
 
+Run methods:
+
 ```bash
 cargo run --release -- --preset demo
+```
+
+```bash
+cargo run --release -- --scenario /path/to/scenario.json
+```
+
+```bash
+cargo build --release
+./target/release/vpp-sim --preset demo
 ```
 
 Write per-timestep telemetry to CSV (schema v1):
 
 ```bash
 cargo run --release -- --preset demo --telemetry-out telemetry.csv
-```
-
-Run a JSON scenario file:
-
-```bash
-cargo run --release -- --scenario /path/to/scenario.json
 ```
 
 Example scenario file:
@@ -89,6 +95,7 @@ Feeder peak load: 3.91 kW
 Notes:
 
 - Example values are illustrative; exact numbers depend on random seeds and configuration.
+- Same scenario + same seed yields deterministic telemetry output.
 - `LimitOK=true` indicates the feeder stayed within configured import/export limits at that timestep.
 - `--telemetry-out` writes CSV columns:
   `timestep,time_hr,target_kw,feeder_kw,tracking_error_kw,baseload_kw,solar_kw,ev_requested_kw,ev_dispatched_kw,battery_kw,battery_soc,dr_requested_kw,dr_achieved_kw,limit_ok`

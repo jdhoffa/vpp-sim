@@ -9,8 +9,10 @@ use rand::{SeedableRng, rngs::StdRng};
 ///
 /// # Examples
 ///
-/// ```
+/// Note: `vpp-sim` currently ships as a binary-first crate; this snippet is illustrative.
+/// ```ignore
 /// use vpp_sim::devices::solar::SolarPv;
+/// use vpp_sim::devices::types::{Device, DeviceContext};
 ///
 /// // Create a solar PV system (5kW peak, 24 steps per day, sunrise at 6am, sunset at 6pm)
 /// let mut pv = SolarPv::new(
@@ -23,7 +25,7 @@ use rand::{SeedableRng, rngs::StdRng};
 /// );
 ///
 /// // Get generation at noon (step 12)
-/// let generation = pv.power_kw(12);
+/// let generation = pv.power_kw(&DeviceContext::new(12));
 /// ```
 #[derive(Debug, Clone)]
 pub struct SolarPv {

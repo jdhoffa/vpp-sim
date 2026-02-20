@@ -12,9 +12,10 @@ use crate::devices::types::{Device, DeviceContext};
 ///
 /// # Examples
 ///
-/// ```
+/// Note: `vpp-sim` currently ships as a binary-first crate; this snippet is illustrative.
+/// ```ignore
 /// use vpp_sim::devices::battery::Battery;
-/// use vpp_sim::devices::types::DeviceContext;
+/// use vpp_sim::devices::types::{Device, DeviceContext};
 ///
 /// // Create a 10kWh battery at 50% SOC with 5kW charge/discharge limits
 /// let mut battery = Battery::new(
