@@ -7,6 +7,10 @@ pub struct ScenarioConfig {
     pub feeder_kw: f32,
     pub seed: u64,
     pub steps_per_day: usize,
+    pub solar_kw_peak_per_house: f32,
+    pub dr_start_step: usize,
+    pub dr_end_step: usize,
+    pub dr_reduction_kw_per_house: f32,
 }
 
 impl Default for ScenarioConfig {
@@ -16,24 +20,57 @@ impl Default for ScenarioConfig {
             feeder_kw: 5.0,
             seed: 42,
             steps_per_day: 24,
+            solar_kw_peak_per_house: 5.0,
+            dr_start_step: 17,
+            dr_end_step: 21,
+            dr_reduction_kw_per_house: 1.5,
         }
     }
 }
 
 impl ScenarioConfig {
-    pub fn from_json_path(path: &Path) -> Result<Self, String> {
-        let raw = fs::read_to_string(path)
-            .map_err(|err| format!("failed to read scenario `{}`: {err}", path.display()))?;
-        let pairs = parse_flat_json_object(&raw)
-            .map_err(|err| format!("invalid JSON in scenario `{}`: {err}", path.display()))?;
+    pub fn from_path(path: &Path) -> Result<Self, String> {
+        let resolved_path = resolve_scenario_path(path);
+        let raw = fs::read_to_string(&resolved_path).map_err(|err| {
+            format!(
+                "failed to read scenario `{}`: {err}",
+                resolved_path.display()
+            )
+        })?;
+
+        let ext = resolved_path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("");
+        let pairs = match ext {
+            "toml" => parse_flat_toml_table(&raw).map_err(|err| {
+                format!(
+                    "invalid TOML in scenario `{}`: {err}",
+                    resolved_path.display()
+                )
+            })?,
+            "json" => parse_flat_json_object(&raw).map_err(|err| {
+                format!(
+                    "invalid JSON in scenario `{}`: {err}",
+                    resolved_path.display()
+                )
+            })?,
+            _ => {
+                return Err(format!(
+                    "unsupported scenario format for `{}` (expected .toml)",
+                    resolved_path.display()
+                ));
+            }
+        };
+
         Self::from_kv_pairs(&pairs)
-            .map_err(|err| format!("invalid scenario `{}`: {err}", path.display()))
+            .map_err(|err| format!("invalid scenario `{}`: {err}", resolved_path.display()))
     }
 
     pub fn from_preset(name: &str) -> Result<Self, String> {
-        let scenario_path = PathBuf::from("scenarios").join(format!("{name}.json"));
+        let scenario_path = PathBuf::from("scenarios").join(format!("{name}.toml"));
         if scenario_path.exists() {
-            return Self::from_json_path(&scenario_path);
+            return Self::from_path(&scenario_path);
         }
 
         match name {
@@ -48,7 +85,14 @@ impl ScenarioConfig {
     fn from_kv_pairs(obj: &[(String, String)]) -> Result<Self, String> {
         for (key, _) in obj {
             match key.as_str() {
-                "houses" | "feeder_kw" | "seed" | "steps_per_day" => {}
+                "houses"
+                | "feeder_kw"
+                | "seed"
+                | "steps_per_day"
+                | "solar_kw_peak_per_house"
+                | "dr_start_step"
+                | "dr_end_step"
+                | "dr_reduction_kw_per_house" => {}
                 _ => return Err(format!("at `$.{key}`: unknown key")),
             }
         }
@@ -57,6 +101,18 @@ impl ScenarioConfig {
         let feeder_kw = parse_f32(find_value(obj, "feeder_kw"), "$.feeder_kw", 5.0)?;
         let seed = parse_u64(find_value(obj, "seed"), "$.seed", 42)?;
         let steps_per_day = parse_usize(find_value(obj, "steps_per_day"), "$.steps_per_day", 24)?;
+        let solar_kw_peak_per_house = parse_f32(
+            find_value(obj, "solar_kw_peak_per_house"),
+            "$.solar_kw_peak_per_house",
+            5.0,
+        )?;
+        let dr_start_step = parse_usize(find_value(obj, "dr_start_step"), "$.dr_start_step", 17)?;
+        let dr_end_step = parse_usize(find_value(obj, "dr_end_step"), "$.dr_end_step", 21)?;
+        let dr_reduction_kw_per_house = parse_f32(
+            find_value(obj, "dr_reduction_kw_per_house"),
+            "$.dr_reduction_kw_per_house",
+            1.5,
+        )?;
 
         if houses == 0 {
             return Err("at `$.houses`: must be > 0".to_string());
@@ -67,13 +123,45 @@ impl ScenarioConfig {
         if steps_per_day == 0 {
             return Err("at `$.steps_per_day`: must be > 0".to_string());
         }
+        if solar_kw_peak_per_house < 0.0 {
+            return Err("at `$.solar_kw_peak_per_house`: must be >= 0".to_string());
+        }
+        if dr_start_step >= steps_per_day {
+            return Err("at `$.dr_start_step`: must be < steps_per_day".to_string());
+        }
+        if dr_end_step > steps_per_day {
+            return Err("at `$.dr_end_step`: must be <= steps_per_day".to_string());
+        }
+        if dr_start_step >= dr_end_step {
+            return Err("at `$.dr_start_step`: must be < dr_end_step".to_string());
+        }
+        if dr_reduction_kw_per_house < 0.0 {
+            return Err("at `$.dr_reduction_kw_per_house`: must be >= 0".to_string());
+        }
 
         Ok(Self {
             houses,
             feeder_kw,
             seed,
             steps_per_day,
+            solar_kw_peak_per_house,
+            dr_start_step,
+            dr_end_step,
+            dr_reduction_kw_per_house,
         })
+    }
+}
+
+fn resolve_scenario_path(path: &Path) -> PathBuf {
+    if path.exists() {
+        return path.to_path_buf();
+    }
+
+    let fallback = PathBuf::from("scenarios").join(path);
+    if fallback.exists() {
+        fallback
+    } else {
+        path.to_path_buf()
     }
 }
 
@@ -125,117 +213,66 @@ fn parse_f32(value: Option<&str>, path: &str, default: f32) -> Result<f32, Strin
 }
 
 fn parse_flat_json_object(raw: &str) -> Result<Vec<(String, String)>, String> {
-    let mut i = 0usize;
-    let bytes = raw.as_bytes();
-    skip_ws(bytes, &mut i);
-    expect_char(bytes, &mut i, b'{')?;
-    skip_ws(bytes, &mut i);
+    let value: serde_json::Value =
+        serde_json::from_str(raw).map_err(|err| format!("failed to parse JSON: {err}"))?;
+    let obj = value
+        .as_object()
+        .ok_or_else(|| "expected top-level JSON object".to_string())?;
 
-    let mut pairs = Vec::new();
-    if i < bytes.len() && bytes[i] == b'}' {
-        i += 1;
-        skip_ws(bytes, &mut i);
-        if i != bytes.len() {
-            return Err(format!("unexpected trailing content at byte {i}"));
-        }
-        return Ok(pairs);
-    }
-
-    loop {
-        skip_ws(bytes, &mut i);
-        let key = parse_json_string(bytes, &mut i)?;
-        skip_ws(bytes, &mut i);
-        expect_char(bytes, &mut i, b':')?;
-        skip_ws(bytes, &mut i);
-        let value = parse_json_number_literal(bytes, &mut i)?;
-        pairs.push((key, value));
-        skip_ws(bytes, &mut i);
-
-        if i >= bytes.len() {
-            return Err("expected `,` or `}` at end of object".to_string());
-        }
-        match bytes[i] {
-            b',' => {
-                i += 1;
-            }
-            b'}' => {
-                i += 1;
-                break;
-            }
-            _ => return Err(format!("expected `,` or `}}` at byte {i}")),
-        }
-    }
-
-    skip_ws(bytes, &mut i);
-    if i != bytes.len() {
-        return Err(format!("unexpected trailing content at byte {i}"));
+    let mut pairs = Vec::with_capacity(obj.len());
+    for (key, value) in obj {
+        let as_string = value_to_numeric_string(value, key)?;
+        pairs.push((key.clone(), as_string));
     }
     Ok(pairs)
 }
 
-fn skip_ws(bytes: &[u8], i: &mut usize) {
-    while *i < bytes.len() && bytes[*i].is_ascii_whitespace() {
-        *i += 1;
+fn parse_flat_toml_table(raw: &str) -> Result<Vec<(String, String)>, String> {
+    let value: toml::Value = raw
+        .parse::<toml::Value>()
+        .map_err(|err| format!("failed to parse TOML: {err}"))?;
+    let table = value
+        .as_table()
+        .ok_or_else(|| "expected top-level TOML table".to_string())?;
+
+    let mut pairs = Vec::with_capacity(table.len());
+    for (key, value) in table {
+        let as_string = toml_value_to_numeric_string(value, key)?;
+        pairs.push((key.clone(), as_string));
     }
+    Ok(pairs)
 }
 
-fn expect_char(bytes: &[u8], i: &mut usize, ch: u8) -> Result<(), String> {
-    if *i >= bytes.len() {
-        return Err(format!("expected `{}` at end of input", ch as char));
+fn value_to_numeric_string(value: &serde_json::Value, key: &str) -> Result<String, String> {
+    if let Some(n) = value.as_u64() {
+        return Ok(n.to_string());
     }
-    if bytes[*i] != ch {
-        return Err(format!("expected `{}` at byte {}", ch as char, *i));
+    if let Some(n) = value.as_i64() {
+        return Ok(n.to_string());
     }
-    *i += 1;
-    Ok(())
+    if let Some(n) = value.as_f64() {
+        return Ok(n.to_string());
+    }
+
+    Err(format!(
+        "at `$.{key}`: expected numeric value (integer or float)"
+    ))
 }
 
-fn parse_json_string(bytes: &[u8], i: &mut usize) -> Result<String, String> {
-    expect_char(bytes, i, b'"')?;
-    let start = *i;
-    while *i < bytes.len() {
-        let c = bytes[*i];
-        if c == b'\\' {
-            return Err(format!(
-                "unsupported escaped string at byte {} (only plain keys are supported)",
-                *i
-            ));
-        }
-        if c == b'"' {
-            let s = std::str::from_utf8(&bytes[start..*i])
-                .map_err(|_| format!("invalid UTF-8 in string at byte {start}"))?;
-            *i += 1;
-            return Ok(s.to_string());
-        }
-        *i += 1;
+fn toml_value_to_numeric_string(value: &toml::Value, key: &str) -> Result<String, String> {
+    match value {
+        toml::Value::Integer(n) => Ok(n.to_string()),
+        toml::Value::Float(n) => Ok(n.to_string()),
+        _ => Err(format!(
+            "at `$.{key}`: expected numeric value (integer or float)"
+        )),
     }
-    Err("unterminated string".to_string())
-}
-
-fn parse_json_number_literal(bytes: &[u8], i: &mut usize) -> Result<String, String> {
-    let start = *i;
-    if *i < bytes.len() && (bytes[*i] == b'+' || bytes[*i] == b'-') {
-        *i += 1;
-    }
-    while *i < bytes.len() {
-        let c = bytes[*i];
-        if c.is_ascii_digit() || c == b'.' || c == b'e' || c == b'E' || c == b'+' || c == b'-' {
-            *i += 1;
-        } else {
-            break;
-        }
-    }
-    if start == *i {
-        return Err(format!("expected number at byte {start}"));
-    }
-    let value = std::str::from_utf8(&bytes[start..*i])
-        .map_err(|_| format!("invalid number bytes at byte {start}"))?;
-    Ok(value.to_string())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ScenarioConfig;
+    use super::{ScenarioConfig, parse_flat_toml_table};
+    use std::path::Path;
 
     #[test]
     fn scenario_validation_includes_offending_key_path() {
@@ -249,5 +286,20 @@ mod tests {
         let value = vec![("bad_key".to_string(), "1".to_string())];
         let err = ScenarioConfig::from_kv_pairs(&value).expect_err("must fail");
         assert!(err.contains("$.bad_key"));
+    }
+
+    #[test]
+    fn parses_flat_toml_table() {
+        let pairs =
+            parse_flat_toml_table("houses = 2\nfeeder_kw = 10.5\nseed = 9").expect("toml parse");
+        assert!(pairs.iter().any(|(k, v)| k == "houses" && v == "2"));
+        assert!(pairs.iter().any(|(k, v)| k == "feeder_kw" && v == "10.5"));
+    }
+
+    #[test]
+    fn bare_filename_resolves_from_scenarios_dir() {
+        let cfg = ScenarioConfig::from_path(Path::new("baseline.toml"))
+            .expect("baseline preset from scenarios dir should load");
+        assert!(cfg.houses > 0);
     }
 }

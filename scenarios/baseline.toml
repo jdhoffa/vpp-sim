@@ -1,0 +1,9 @@
+# Baseline scenario: balanced defaults.
+houses = 20
+feeder_kw = 200.0
+seed = 42
+steps_per_day = 24
+solar_kw_peak_per_house = 5.0
+dr_start_step = 17
+dr_end_step = 21
+dr_reduction_kw_per_house = 1.5

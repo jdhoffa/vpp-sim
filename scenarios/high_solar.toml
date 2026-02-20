@@ -1,0 +1,9 @@
+# High-solar scenario: stronger daytime solar penetration.
+houses = 20
+feeder_kw = 200.0
+seed = 42
+steps_per_day = 24
+solar_kw_peak_per_house = 12.0
+dr_start_step = 17
+dr_end_step = 21
+dr_reduction_kw_per_house = 0.5

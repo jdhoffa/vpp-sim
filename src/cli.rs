@@ -33,7 +33,7 @@ fn parse_options(args: &[String]) -> Result<CliOptions, String> {
             "--scenario" => {
                 i += 1;
                 let path = args.get(i).ok_or_else(|| {
-                    "missing value for --scenario (expected a JSON file path)".to_string()
+                    "missing value for --scenario (expected a scenario file path (.toml recommended))".to_string()
                 })?;
                 if scenario.replace(PathBuf::from(path)).is_some() {
                     return Err("--scenario provided more than once".to_string());
