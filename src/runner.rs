@@ -52,12 +52,12 @@ pub fn run_scenario(config: &ScenarioConfig, print_readable_log: bool) -> Simula
     let target_schedule = DayAheadSchedule::flat_target(&load_forecast);
 
     let mut pv = SolarPv::new(
-        5.0 * houses,                /* kw_peak */
-        steps_per_day,               /* steps_per_day */
-        6,                           /* sunrise_idx (6 AM) */
-        18,                          /* sunset_idx (6 PM) */
-        0.05,                        /* noise_std */
-        config.seed.wrapping_add(1), /* seed */
+        config.solar_kw_peak_per_house * houses, /* kw_peak */
+        steps_per_day,                           /* steps_per_day */
+        6,                                       /* sunrise_idx (6 AM) */
+        18,                                      /* sunset_idx (6 PM) */
+        0.05,                                    /* noise_std */
+        config.seed.wrapping_add(1),             /* seed */
     );
 
     let solar_device = pv.device_type();
@@ -90,8 +90,11 @@ pub fn run_scenario(config: &ScenarioConfig, print_readable_log: bool) -> Simula
         config.feeder_kw * 0.8, /* max_export_kw */
     );
 
-    // Example external DR event: request 1.5kW reduction from hour 17 to 21.
-    let dr_event = DemandResponseEvent::new(17, 21, 1.5 * houses);
+    let dr_event = DemandResponseEvent::new(
+        config.dr_start_step,
+        config.dr_end_step,
+        config.dr_reduction_kw_per_house * houses,
+    );
 
     let controller = NaiveRtController;
 
@@ -227,6 +230,7 @@ mod tests {
             feeder_kw: 40.0,
             seed: 777,
             steps_per_day: 24,
+            ..ScenarioConfig::default()
         };
 
         let run_a = run_scenario(&scenario, false);

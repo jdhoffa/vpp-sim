@@ -26,7 +26,7 @@ fn main() {
     };
 
     let scenario = if let Some(path) = opts.scenario.as_deref() {
-        match ScenarioConfig::from_json_path(path) {
+        match ScenarioConfig::from_path(path) {
             Ok(s) => s,
             Err(err) => {
                 eprintln!("Error: {err}");

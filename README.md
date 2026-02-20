@@ -48,7 +48,7 @@ cargo run --release -- --preset demo
 ```
 
 ```bash
-cargo run --release -- --scenario /path/to/scenario.json
+cargo run --release -- --scenario /path/to/scenario.toml
 ```
 
 ```bash
@@ -84,13 +84,15 @@ curl -s "http://127.0.0.1:8080/telemetry?from=4&to=8"
 
 Example scenario file:
 
-```json
-{
-  "houses": 20,
-  "feeder_kw": 200,
-  "seed": 42,
-  "steps_per_day": 24
-}
+```toml
+houses = 20
+feeder_kw = 200.0
+seed = 42
+steps_per_day = 24
+solar_kw_peak_per_house = 5.0
+dr_start_step = 17
+dr_end_step = 21
+dr_reduction_kw_per_house = 1.5
 ```
 
 #### Example output:
@@ -120,6 +122,45 @@ Notes:
 - `LimitOK=true` indicates the feeder stayed within configured import/export limits at that timestep.
 - `--telemetry-out` writes CSV columns:
   `timestep,time_hr,target_kw,feeder_kw,tracking_error_kw,baseload_kw,solar_kw,ev_requested_kw,ev_dispatched_kw,battery_kw,battery_soc,dr_requested_kw,dr_achieved_kw,limit_ok`
+
+### Scenario Presets (TOML)
+
+Canonical scenario format is TOML. Built-in presets live under `./scenarios/`:
+
+- `baseline.toml`
+- `high_solar.toml`
+- `dr_event.toml`
+
+Run them via CLI:
+
+```bash
+cargo run --release -- --scenario scenarios/baseline.toml
+```
+
+```bash
+cargo run --release -- --scenario scenarios/high_solar.toml
+```
+
+```bash
+cargo run --release -- --scenario scenarios/dr_event.toml
+```
+
+Bare filenames are also resolved from `./scenarios`, for example:
+
+```bash
+cargo run --release -- --scenario high_solar.toml
+```
+
+Scenario schema keys:
+
+- `houses` (u32, > 0)
+- `feeder_kw` (f32, > 0)
+- `seed` (u64)
+- `steps_per_day` (usize, > 0)
+- `solar_kw_peak_per_house` (f32, >= 0)
+- `dr_start_step` (usize, `< steps_per_day`)
+- `dr_end_step` (usize, `<= steps_per_day` and `> dr_start_step`)
+- `dr_reduction_kw_per_house` (f32, >= 0)
 
 ### HTTP API (schema v1)
 
