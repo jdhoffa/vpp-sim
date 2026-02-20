@@ -1,5 +1,6 @@
 # vpp-sim
 [![Rust](https://github.com/jdhoffa/vpp-sim/actions/workflows/rust.yml/badge.svg)](https://github.com/jdhoffa/vpp-sim/actions/workflows/rust.yml)
+[![Docs](https://github.com/jdhoffa/vpp-sim/actions/workflows/docs.yml/badge.svg)](https://github.com/jdhoffa/vpp-sim/actions/workflows/docs.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 The **Virtual Power Plant Simulator** is an open source project aiming to simulate a neighborhood-scale Virtual Power Plant (VPP) in real time.
@@ -101,12 +102,18 @@ Notes:
   `timestep,time_hr,target_kw,feeder_kw,tracking_error_kw,baseload_kw,solar_kw,ev_requested_kw,ev_dispatched_kw,battery_kw,battery_soc,dr_requested_kw,dr_achieved_kw,limit_ok`
 
 ## Documentation
-The documentation for this project can be opened locally using:
+Hosted docs:
+
+- https://jdhoffa.github.io/vpp-sim/
+
+The documentation for this project can also be opened locally using:
 ```bash
 cargo doc --open
 ```
 
 It contains detailed information about the architecture, modules, and usage of the simulator.
+
+If GitHub Pages is not yet enabled for this repository, set **Settings > Pages > Source** to **Deploy from a branch**, branch **`gh-pages`** (root).
 
 ## License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

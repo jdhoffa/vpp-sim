@@ -1,0 +1,131 @@
+name: Docs
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: "docs-${{ github.event.pull_request.number || github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Rustdoc
+        run: cargo doc --no-deps
+
+      - name: Stage site files
+        run: |
+          mkdir -p site
+          cp -R target/doc/* site/
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: site
+
+  deploy-main:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download docs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: site
+
+      - name: Deploy main docs to gh-pages root
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: site
+          keep_files: true
+          force_orphan: false
+
+  deploy-preview:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download docs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-site
+          path: site
+
+      - name: Deploy PR preview to gh-pages subdirectory
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: site
+          destination_dir: previews/pr-${{ github.event.pull_request.number }}
+          keep_files: true
+          force_orphan: false
+
+      - name: Comment PR with preview URL
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: docs-preview
+          message: |
+            Docs preview deployed for this PR.
+
+            - Preview: https://jdhoffa.github.io/vpp-sim/previews/pr-${{ github.event.pull_request.number }}/
+            - API index: https://jdhoffa.github.io/vpp-sim/previews/pr-${{ github.event.pull_request.number }}/vpp_sim/
+            - Workflow run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+  cleanup-preview:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gh-pages branch
+        id: checkout_pages
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          fetch-depth: 0
+
+      - name: Remove PR preview directory
+        if: steps.checkout_pages.outcome == 'success'
+        run: |
+          PREVIEW_DIR="previews/pr-${{ github.event.pull_request.number }}"
+          if [ -d "$PREVIEW_DIR" ]; then
+            rm -rf "$PREVIEW_DIR"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "chore(docs): remove preview for PR #${{ github.event.pull_request.number }}"
+            git push
+          else
+            echo "No preview directory to clean: $PREVIEW_DIR"
+          fi
+
+      - name: Skip cleanup when gh-pages is missing
+        if: steps.checkout_pages.outcome != 'success'
+        run: echo "gh-pages branch is missing; no preview cleanup needed."
+
+      - name: Update sticky PR comment
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: docs-preview
+          message: |
+            Docs preview was removed because this PR is closed.
