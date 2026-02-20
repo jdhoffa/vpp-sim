@@ -10,6 +10,7 @@ use rand::{SeedableRng, rngs::StdRng};
 ///
 /// ```
 /// use vpp_sim::devices::baseload::BaseLoad;
+/// use vpp_sim::devices::types::{Device, DeviceContext};
 ///
 /// // Create a baseload with typical parameters
 /// let mut load = BaseLoad::new(
@@ -22,7 +23,7 @@ use rand::{SeedableRng, rngs::StdRng};
 /// );
 ///
 /// // Get demand at noon
-/// let demand = load.power_kw(12);
+/// let demand = load.power_kw(&DeviceContext::new(12));
 /// ```
 #[derive(Debug, Clone)]
 pub struct BaseLoad {
