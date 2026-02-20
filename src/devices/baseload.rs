@@ -26,7 +26,7 @@ use rand::{SeedableRng, rngs::StdRng};
 /// // Get demand at noon
 /// let demand = load.power_kw(&DeviceContext::new(12));
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BaseLoad {
     /// Baseline power consumption in kilowatts
     pub base_kw: f32,

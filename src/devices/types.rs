@@ -1,6 +1,6 @@
 //! Common types and traits for device simulation components.
 
-use rand::{Rng, rngs::StdRng};
+use rand::{RngExt, rngs::StdRng};
 
 /// Contextual information passed to devices during power calculations.
 /// Includes the current timestep and optional setpoints for controllable devices.
@@ -72,6 +72,6 @@ pub fn gaussian_noise(rng: &mut StdRng, std_dev: f32) -> f32 {
 
     let u1: f32 = rng.random::<f32>().clamp(1e-6, 1.0);
     let u2: f32 = rng.random::<f32>();
-    let z0 = (-2.0 * u1.ln()).sqrt() * (2.0 * std::f32::consts::PI * u2).cos();
+    let z0 = (-2.0_f32 * u1.ln()).sqrt() * (2.0_f32 * std::f32::consts::PI * u2).cos();
     z0 * std_dev
 }
