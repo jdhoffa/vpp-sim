@@ -29,24 +29,8 @@ jobs:
 
       - name: Stage site
         run: |
-          mkdir -p site/api
-          cp -R target/doc/* site/api/
-          cp docs/index.md site/index.md
-          cat > site/index.html <<'EOF'
-          <!doctype html>
-          <html lang="en">
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>vpp-sim Docs</title>
-          </head>
-          <body>
-            <h1>vpp-sim Documentation</h1>
-            <p><a href="https://github.com/jdhoffa/vpp-sim#-running-the-demo-simulation">Quickstart (README)</a></p>
-            <p><a href="./api/vpp_sim/">Rust API docs</a></p>
-          </body>
-          </html>
-          EOF
+          mkdir -p site
+          cp -R target/doc/* site/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
