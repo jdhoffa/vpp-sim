@@ -48,10 +48,6 @@ cargo run --release -- --preset demo
 ```
 
 ```bash
-cargo run --release -- --scenario /path/to/scenario.json
-```
-
-```bash
 cargo run --release -- --scenario /path/to/scenario.toml
 ```
 

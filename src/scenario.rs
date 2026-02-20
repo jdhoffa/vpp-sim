@@ -49,12 +49,6 @@ impl ScenarioConfig {
                     resolved_path.display()
                 )
             })?,
-            "json" => parse_flat_json_object(&raw).map_err(|err| {
-                format!(
-                    "invalid JSON in scenario `{}`: {err}",
-                    resolved_path.display()
-                )
-            })?,
             _ => {
                 return Err(format!(
                     "unsupported scenario format for `{}` (expected .toml)",
@@ -212,21 +206,6 @@ fn parse_f32(value: Option<&str>, path: &str, default: f32) -> Result<f32, Strin
     Ok(n as f32)
 }
 
-fn parse_flat_json_object(raw: &str) -> Result<Vec<(String, String)>, String> {
-    let value: serde_json::Value =
-        serde_json::from_str(raw).map_err(|err| format!("failed to parse JSON: {err}"))?;
-    let obj = value
-        .as_object()
-        .ok_or_else(|| "expected top-level JSON object".to_string())?;
-
-    let mut pairs = Vec::with_capacity(obj.len());
-    for (key, value) in obj {
-        let as_string = value_to_numeric_string(value, key)?;
-        pairs.push((key.clone(), as_string));
-    }
-    Ok(pairs)
-}
-
 fn parse_flat_toml_table(raw: &str) -> Result<Vec<(String, String)>, String> {
     let value: toml::Value = raw
         .parse::<toml::Value>()
@@ -241,22 +220,6 @@ fn parse_flat_toml_table(raw: &str) -> Result<Vec<(String, String)>, String> {
         pairs.push((key.clone(), as_string));
     }
     Ok(pairs)
-}
-
-fn value_to_numeric_string(value: &serde_json::Value, key: &str) -> Result<String, String> {
-    if let Some(n) = value.as_u64() {
-        return Ok(n.to_string());
-    }
-    if let Some(n) = value.as_i64() {
-        return Ok(n.to_string());
-    }
-    if let Some(n) = value.as_f64() {
-        return Ok(n.to_string());
-    }
-
-    Err(format!(
-        "at `$.{key}`: expected numeric value (integer or float)"
-    ))
 }
 
 fn toml_value_to_numeric_string(value: &toml::Value, key: &str) -> Result<String, String> {
