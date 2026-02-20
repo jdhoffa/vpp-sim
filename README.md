@@ -40,13 +40,30 @@ Running the default binary triggers a demonstrative 24-step (1-hr interval) simu
 - Post-run KPI summary
 
 ```bash
-cargo run --release
+cargo run --release -- --preset demo
 ```
 
 Write per-timestep telemetry to CSV (schema v1):
 
 ```bash
-cargo run --release -- --telemetry-out telemetry.csv
+cargo run --release -- --preset demo --telemetry-out telemetry.csv
+```
+
+Run a JSON scenario file:
+
+```bash
+cargo run --release -- --scenario /path/to/scenario.json
+```
+
+Example scenario file:
+
+```json
+{
+  "houses": 20,
+  "feeder_kw": 200,
+  "seed": 42,
+  "steps_per_day": 24
+}
 ```
 
 #### Example output:

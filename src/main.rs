@@ -3,12 +3,14 @@ mod devices;
 mod forecast;
 mod reporting;
 mod runner;
+mod scenario;
 mod sim;
 mod telemetry;
 
 use cli::{parse_args, print_usage};
 use reporting::print_kpi_report;
-use runner::run_demo;
+use runner::run_scenario;
+use scenario::ScenarioConfig;
 use telemetry::write_telemetry_to_path;
 
 fn main() {
@@ -21,7 +23,27 @@ fn main() {
         }
     };
 
-    let result = run_demo(true);
+    let scenario = if let Some(path) = opts.scenario.as_deref() {
+        match ScenarioConfig::from_json_path(path) {
+            Ok(s) => s,
+            Err(err) => {
+                eprintln!("Error: {err}");
+                std::process::exit(2);
+            }
+        }
+    } else if let Some(preset) = opts.preset.as_deref() {
+        match ScenarioConfig::from_preset(preset) {
+            Ok(s) => s,
+            Err(err) => {
+                eprintln!("Error: {err}");
+                std::process::exit(2);
+            }
+        }
+    } else {
+        ScenarioConfig::default()
+    };
+
+    let result = run_scenario(&scenario, true);
     if let Some(path) = opts.telemetry_out.as_deref() {
         if let Err(err) = write_telemetry_to_path(path, &result.telemetry) {
             eprintln!(
