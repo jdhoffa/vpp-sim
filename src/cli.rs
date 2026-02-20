@@ -5,6 +5,7 @@ pub struct CliOptions {
     pub scenario: Option<PathBuf>,
     pub preset: Option<String>,
     pub telemetry_out: Option<PathBuf>,
+    pub api_bind: Option<String>,
 }
 
 pub fn parse_args() -> Result<CliOptions, String> {
@@ -25,6 +26,7 @@ fn parse_options(args: &[String]) -> Result<CliOptions, String> {
     let mut scenario = None;
     let mut preset = None;
     let mut telemetry_out = None;
+    let mut api_bind = None;
 
     while i < args.len() {
         match args[i].as_str() {
@@ -56,6 +58,14 @@ fn parse_options(args: &[String]) -> Result<CliOptions, String> {
                     return Err("--telemetry-out provided more than once".to_string());
                 }
             }
+            "--api-bind" => {
+                i += 1;
+                let addr =
+                    args.next_or_err(i, "missing value for --api-bind (expected host:port)")?;
+                if api_bind.replace(addr.to_string()).is_some() {
+                    return Err("--api-bind provided more than once".to_string());
+                }
+            }
             "--help" | "-h" => {
                 print_usage();
                 std::process::exit(0);
@@ -80,6 +90,7 @@ fn parse_options(args: &[String]) -> Result<CliOptions, String> {
         scenario,
         preset,
         telemetry_out,
+        api_bind,
     })
 }
 
@@ -98,7 +109,7 @@ impl SliceArgExt for [String] {
 pub fn print_usage() {
     eprintln!("Usage:");
     eprintln!(
-        "  cargo run --release -- [--scenario <path> | --preset <name>] [--telemetry-out <path>]"
+        "  cargo run --release -- [--scenario <path> | --preset <name>] [--telemetry-out <path>] [--api-bind <host:port>]"
     );
 }
 
@@ -123,5 +134,17 @@ mod tests {
             .expect("parse should succeed");
         assert_eq!(opts.preset.as_deref(), Some("demo"));
         assert!(opts.scenario.is_none());
+    }
+
+    #[test]
+    fn supports_api_bind_cli() {
+        let opts = parse_args_from(vec![
+            "--preset".to_string(),
+            "demo".to_string(),
+            "--api-bind".to_string(),
+            "127.0.0.1:8080".to_string(),
+        ])
+        .expect("parse should succeed");
+        assert_eq!(opts.api_bind.as_deref(), Some("127.0.0.1:8080"));
     }
 }

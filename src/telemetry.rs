@@ -1,10 +1,11 @@
+use serde::Serialize;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
 pub const TELEMETRY_SCHEMA_V1_HEADER: &str = "timestep,time_hr,target_kw,feeder_kw,tracking_error_kw,baseload_kw,solar_kw,ev_requested_kw,ev_dispatched_kw,battery_kw,battery_soc,dr_requested_kw,dr_achieved_kw,limit_ok";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct TelemetryRow {
     pub timestep: usize,
     pub time_hr: f32,
