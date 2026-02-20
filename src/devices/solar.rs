@@ -9,7 +9,8 @@ use rand::{SeedableRng, rngs::StdRng};
 ///
 /// # Examples
 ///
-/// ```
+/// Note: `vpp-sim` currently ships as a binary-first crate; this snippet is illustrative.
+/// ```ignore
 /// use vpp_sim::devices::solar::SolarPv;
 /// use vpp_sim::devices::types::{Device, DeviceContext};
 ///
