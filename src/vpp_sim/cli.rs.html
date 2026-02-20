@@ -33,7 +33,7 @@
 <a href=#33 id=33 data-nosnippet>33</a>            <span class="string">"--scenario" </span>=&gt; {
 <a href=#34 id=34 data-nosnippet>34</a>                i += <span class="number">1</span>;
 <a href=#35 id=35 data-nosnippet>35</a>                <span class="kw">let </span>path = args.get(i).ok_or_else(|| {
-<a href=#36 id=36 data-nosnippet>36</a>                    <span class="string">"missing value for --scenario (expected a JSON file path)"</span>.to_string()
+<a href=#36 id=36 data-nosnippet>36</a>                    <span class="string">"missing value for --scenario (expected a .toml scenario file path)"</span>.to_string()
 <a href=#37 id=37 data-nosnippet>37</a>                })<span class="question-mark">?</span>;
 <a href=#38 id=38 data-nosnippet>38</a>                <span class="kw">if </span>scenario.replace(PathBuf::from(path)).is_some() {
 <a href=#39 id=39 data-nosnippet>39</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"--scenario provided more than once"</span>.to_string());
