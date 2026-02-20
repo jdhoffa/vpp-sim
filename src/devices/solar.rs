@@ -27,7 +27,7 @@ use rand::{SeedableRng, rngs::StdRng};
 /// // Get generation at noon (step 12)
 /// let generation = pv.power_kw(&DeviceContext::new(12));
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SolarPv {
     /// Maximum power output in kilowatts under ideal conditions
     pub kw_peak: f32,

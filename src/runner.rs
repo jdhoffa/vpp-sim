@@ -35,7 +35,14 @@ pub fn run_scenario(config: &ScenarioConfig, print_readable_log: bool) -> Simula
     );
 
     let baseload_device = load.device_type();
-    let mut baseline_load = load.clone();
+    let mut baseline_load = BaseLoad::new(
+        0.8 * houses,
+        0.7 * houses,
+        1.2,
+        0.05,
+        steps_per_day,
+        config.seed,
+    );
     let mut baseline = Vec::with_capacity(steps_per_day);
     for t in 0..steps_per_day {
         baseline.push(baseline_load.power_kw(&DeviceContext::new(t)));

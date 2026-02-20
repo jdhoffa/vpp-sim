@@ -1,5 +1,5 @@
 use crate::devices::types::{Device, DeviceContext};
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{RngExt, SeedableRng, rngs::StdRng};
 
 #[derive(Debug, Clone)]
 struct EvSession {
@@ -17,7 +17,7 @@ struct EvSession {
 ///
 /// During an active session, charging power is computed as the minimum required
 /// to meet the remaining energy by the deadline, limited by `max_charge_kw`.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct EvCharger {
     /// Maximum charging power in kilowatts.
     pub max_charge_kw: f32,
