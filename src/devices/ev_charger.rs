@@ -8,7 +8,7 @@ struct EvSession {
     remaining_kwh: f32,
 }
 
-/// A flexible EV charging load with random daily arrivals.
+/// A flexible electric load model using EV-style charging sessions.
 ///
 /// Each simulated day, this model samples one charging session with:
 /// - random arrival time

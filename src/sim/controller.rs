@@ -14,7 +14,7 @@ impl NaiveRtController {
         net_without_battery - target_kw
     }
 
-    /// Cap a flexible load (e.g., EV charging) so feeder import can be kept under limit
+    /// Cap a flexible load (e.g., EV/pump/refrigeration-like demand) so feeder import can be kept under limit
     /// with available battery discharge.
     pub fn capped_flexible_load_kw(
         &self,

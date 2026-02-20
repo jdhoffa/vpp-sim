@@ -3,14 +3,14 @@
 [![Docs](https://github.com/jdhoffa/vpp-sim/actions/workflows/docs.yml/badge.svg)](https://github.com/jdhoffa/vpp-sim/actions/workflows/docs.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-The **Virtual Power Plant Simulator** is an open source project aiming to simulate a neighborhood-scale Virtual Power Plant (VPP) in real time.
+The **Virtual Power Plant Simulator** is an open source project for simulating small C&I site-scale Virtual Power Plant (VPP) behavior in real time.
 
 The simulator models a local distribution feeder with a mix of flexible and inflexible devices, including:
 
-- ☀️ Residential solar PV
-- 🔋 Home battery storage systems
-- 🚗 EV charging stations
-- 💡 Flexible and baseline household demand
+- ☀️ On-site solar PV
+- 🔋 On-site battery storage systems
+- ⚙️ Flexible electric loads (e.g., EV charging, pumps, refrigeration)
+- 💡 Baseline and controllable site demand
 - 🧠 A coordinating aggregator (the "VPP")
 - 🚨 Demand response events for temporary load reduction
 - 📏 Feeder import/export capacity constraints
@@ -35,7 +35,7 @@ Stay tuned!
 Running the default binary triggers a demonstrative 24-step (1-hr interval) simulation with:
 
 - Baseline load + solar generation
-- Flexible EV charging demand
+- Flexible electric demand (EV/pump/refrigeration-like profiles)
 - Battery tracking control
 - Feeder import/export limits
 - A demand response event window
