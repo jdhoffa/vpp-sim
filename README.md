@@ -62,6 +62,26 @@ Write per-timestep telemetry to CSV (schema v1):
 cargo run --release -- --preset demo --telemetry-out telemetry.csv
 ```
 
+Run the HTTP API for state + telemetry snapshots:
+
+```bash
+cargo run --release -- --preset demo --api-bind 127.0.0.1:8080
+```
+
+Example requests:
+
+```bash
+curl -s http://127.0.0.1:8080/state
+```
+
+```bash
+curl -s http://127.0.0.1:8080/telemetry
+```
+
+```bash
+curl -s "http://127.0.0.1:8080/telemetry?from=4&to=8"
+```
+
 Example scenario file:
 
 ```json
@@ -100,6 +120,14 @@ Notes:
 - `LimitOK=true` indicates the feeder stayed within configured import/export limits at that timestep.
 - `--telemetry-out` writes CSV columns:
   `timestep,time_hr,target_kw,feeder_kw,tracking_error_kw,baseload_kw,solar_kw,ev_requested_kw,ev_dispatched_kw,battery_kw,battery_soc,dr_requested_kw,dr_achieved_kw,limit_ok`
+
+### HTTP API (schema v1)
+
+The API serves JSON objects using the same schema v1 field names as telemetry CSV.
+
+- `GET /state` returns the latest snapshot object.
+- `GET /telemetry` returns all recorded telemetry rows.
+- `GET /telemetry?from=<timestep>&to=<timestep>` returns rows in an inclusive timestep range.
 
 ## Documentation
 Hosted docs:

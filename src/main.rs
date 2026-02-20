@@ -1,3 +1,4 @@
+mod api;
 mod cli;
 mod devices;
 mod forecast;
@@ -7,6 +8,7 @@ mod scenario;
 mod sim;
 mod telemetry;
 
+use api::run_http_server;
 use cli::{parse_args, print_usage};
 use reporting::print_kpi_report;
 use runner::run_scenario;
@@ -55,4 +57,11 @@ fn main() {
     }
 
     print_kpi_report(&result.kpis);
+
+    if let Some(bind_addr) = opts.api_bind.as_deref() {
+        if let Err(err) = run_http_server(bind_addr, result.telemetry.clone()) {
+            eprintln!("Error: failed to start HTTP API on {bind_addr}: {err}");
+            std::process::exit(1);
+        }
+    }
 }
