@@ -207,15 +207,11 @@ fn parse_f32(value: Option<&str>, path: &str, default: f32) -> Result<f32, Strin
 }
 
 fn parse_flat_toml_table(raw: &str) -> Result<Vec<(String, String)>, String> {
-    let value: toml::Value = raw
-        .parse::<toml::Value>()
-        .map_err(|err| format!("failed to parse TOML: {err}"))?;
-    let table = value
-        .as_table()
-        .ok_or_else(|| "expected top-level TOML table".to_string())?;
+    let table: toml::Table =
+        toml::from_str(raw).map_err(|err| format!("failed to parse TOML: {err}"))?;
 
     let mut pairs = Vec::with_capacity(table.len());
-    for (key, value) in table {
+    for (key, value) in &table {
         let as_string = toml_value_to_numeric_string(value, key)?;
         pairs.push((key.clone(), as_string));
     }
