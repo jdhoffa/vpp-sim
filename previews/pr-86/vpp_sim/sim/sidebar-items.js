@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["clock","controller","event","feeder","schedule"]};
