@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["baseload","battery","ev_charger","solar","types"]};
