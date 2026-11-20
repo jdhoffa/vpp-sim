@@ -1,2 +1,0 @@
-createSrcSidebar('[["vpp_sim",["",[["devices",[],["baseload.rs","battery.rs","ev_charger.rs","mod.rs","solar.rs","types.rs"]],["sim",[],["clock.rs","controller.rs","event.rs","feeder.rs","mod.rs","schedule.rs"]]],["api.rs","cli.rs","forecast.rs","main.rs","reporting.rs","runner.rs","scenario.rs","telemetry.rs"]]]]');
-//{"start":19,"fragment_lengths":[295]}
